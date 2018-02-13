@@ -566,7 +566,7 @@ export function createJobClass({ Meteor }) {
       let Fiber = _Fiber;
       let collectionNames = _collectionNames;
 
-      if ((typeof collectionNames !== "string") && (!(collectionNames instanceof Array))) {
+      if (typeof collectionNames !== "string" && Array.isArray(collectionNames) === false) {
         // Handle optional collection string with Fiber present
         Fiber = collectionNames;
         collectionNames = [undefined];
@@ -577,43 +577,34 @@ export function createJobClass({ Meteor }) {
       return (() => {
         const result = [];
         for (const collName of Array.from(collectionNames)) {
-          if (!ddp || !ddp.close || !ddp.subscribe) {
-            // Not the DDP npm package
-            if (!ddp && (typeof Meteor !== "undefined" && Meteor !== null ? Meteor.apply : undefined)) {
-              // Meteor local server/client
-              result.push(this._setDDPApply(Meteor.apply, collName));
-            } else {
-              // No other possibilities...
-              throw new Error("Bad ddp object in Job.setDDP()");
-            }
-          } else if (!ddp.observe) {  // This is a Meteor DDP connection object
-            result.push(this._setDDPApply(ddp.apply.bind(ddp), collName));
-          } else { // This is the npm DDP package
-            if (!Fiber) {
-              result.push(this._setDDPApply(ddp.call.bind(ddp), collName));
-            } else {
-              // If Fibers in use under pure node.js,
-              // make sure to yield and throw errors when no callback
-              result.push(this._setDDPApply((name, params, cb) => {
-                const fib = Fiber.current;
-                ddp.call(name, params, (err, res) => {
-                  if (typeof cb === "function") {
-                    return cb(err, res);
-                  }
-
-                  if (err) {
-                    return fib.throwInto(err);
-                  }
-
-                  return fib.run(res);
-                });
+          if (ddp && ddp.call && !Fiber) {
+            result.push(this._setDDPApply(ddp.call.bind(ddp), collName));
+          } else if (ddp && ddp.call) {
+            // If Fibers in use under pure node.js,
+            // make sure to yield and throw errors when no callback
+            result.push(this._setDDPApply((name, params, cb) => {
+              const fib = Fiber.current;
+              ddp.call(name, params, (err, res) => {
                 if (typeof cb === "function") {
-                  return;
+                  return cb(err, res);
                 }
 
-                return Fiber.yield();
-              }, collName));
-            }
+                if (err) {
+                  return fib.throwInto(err);
+                }
+
+                return fib.run(res);
+              });
+              if (typeof cb === "function") {
+                return;
+              }
+
+              return Fiber.yield();
+            }, collName));
+          } else if (Meteor && Meteor.apply) {
+            result.push(this._setDDPApply(Meteor.apply, collName));
+          } else {
+            throw new Error("Bad ddp object in Job.setDDP()");
           }
         }
         return result;
