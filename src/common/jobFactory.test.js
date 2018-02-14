@@ -546,72 +546,75 @@ describe("Job", () => {
       ));
     });
   });
+
+  describe("Job constructor", () => {
+    const checkJob = (job) => {
+      expect(job).toBeInstanceOf(Job);
+      expect(job.root).toBe("root");
+      expect(job.type).toBe("work");
+      expect(job.data).toEqual({ foo: "bar" });
+      expect(typeof job._doc).toBe("object");
+      const doc = job._doc;
+      // expect(doc).notProperty("_id");
+      expect(doc.runId).toBeNull();
+      expect(job.type).toBe(doc.type);
+      expect(job.data).toEqual(doc.data);
+      expect(typeof doc.status).toBe("string");
+      expect(doc.updated).toBeInstanceOf(Date);
+      expect(Array.isArray(doc.depends)).toBe(true);
+      expect(Array.isArray(doc.resolved)).toBe(true);
+      expect(typeof doc.priority).toBe("number");
+      expect(typeof doc.retries).toBe("number");
+      expect(typeof doc.retryWait).toBe("number");
+      expect(typeof doc.retried).toBe("number");
+      expect(typeof doc.retryBackoff).toBe("string");
+      expect(doc.retryUntil).toBeInstanceOf(Date);
+      expect(typeof doc.repeats).toBe("number");
+      expect(typeof doc.repeatWait).toBe("number");
+      expect(typeof doc.repeated).toBe("number");
+      expect(doc.repeatUntil).toBeInstanceOf(Date);
+      expect(doc.after).toBeInstanceOf(Date);
+      expect(Array.isArray(doc.log)).toBe(true);
+      expect(typeof doc.progress).toBe("object");
+      expect(doc.created).toBeInstanceOf(Date);
+    };
+
+    it("should return a new valid Job object", () => {
+      const job = new Job("root", "work", { foo: "bar" });
+      checkJob(job);
+    });
+
+    // it("should work without 'new'", () => {
+    //   const job = Job("root", "work", { foo: "bar" });
+    //   checkJob(job);
+    // });
+
+    // it("should throw when given bad parameters", () => {
+    //   expect(Job).toThrow(/new Job: bad parameter/);
+    // });
+
+    // it("should support using a valid job document", function () {
+    //   const job = new Job("root", "work", { foo: "bar" });
+    //   checkJob(job);
+    //   const job2 = new Job("root", job.doc);
+    //   return checkJob(job2);
+    // });
+
+    // return it("should support using a valid oobject for root", function () {
+    //   const job = new Job({
+    //     root: "root"
+    //   }, "work", { foo: "bar" });
+    //   checkJob(job);
+    //   const job2 = new Job({
+    //     root: "root"
+    //   }, job.doc);
+    //   return checkJob(job2);
+    // });
+  });
 });
 
 
-//   describe("Job constructor", function () {
 
-//     const checkJob = function (job) {
-//       assert.instanceOf(job, Job);
-//       assert.equal(job.root, "root");
-//       assert.equal(job.type, "work");
-//       assert.deepEqual(job.data, { foo: "bar" });
-//       assert.isObject(job._doc);
-//       const doc = job._doc;
-//       assert.notProperty(doc, "_id");
-//       assert.isNull(doc.runId);
-//       assert.equal(job.type, doc.type);
-//       assert.deepEqual(job.data, doc.data);
-//       assert.isString(doc.status);
-//       assert.instanceOf(doc.updated, Date);
-//       assert.isArray(doc.depends);
-//       assert.isArray(doc.resolved);
-//       assert.isNumber(doc.priority);
-//       assert.isNumber(doc.retries);
-//       assert.isNumber(doc.retryWait);
-//       assert.isNumber(doc.retried);
-//       assert.isString(doc.retryBackoff);
-//       assert.instanceOf(doc.retryUntil, Date);
-//       assert.isNumber(doc.repeats);
-//       assert.isNumber(doc.repeatWait);
-//       assert.isNumber(doc.repeated);
-//       assert.instanceOf(doc.repeatUntil, Date);
-//       assert.instanceOf(doc.after, Date);
-//       assert.isArray(doc.log);
-//       assert.isObject(doc.progress);
-//       return assert.instanceOf(doc.created, Date);
-//     };
-
-//     it("should return a new valid Job object", function () {
-//       const job = new Job("root", "work", { foo: "bar" });
-//       return checkJob(job);
-//     });
-
-//     it("should work without 'new'", function () {
-//       const job = Job("root", "work", { foo: "bar" });
-//       return checkJob(job);
-//     });
-
-//     it("should throw when given bad parameters", () => assert.throw(Job, /new Job: bad parameter/));
-
-//     it("should support using a valid job document", function () {
-//       const job = new Job("root", "work", { foo: "bar" });
-//       checkJob(job);
-//       const job2 = new Job("root", job.doc);
-//       return checkJob(job2);
-//     });
-
-//     return it("should support using a valid oobject for root", function () {
-//       const job = new Job({
-//         root: "root"
-//       }, "work", { foo: "bar" });
-//       checkJob(job);
-//       const job2 = new Job({
-//         root: "root"
-//       }, job.doc);
-//       return checkJob(job2);
-//     });
-//   });
 
 //   describe("job mutator method", function () {
 
