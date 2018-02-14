@@ -1380,7 +1380,7 @@ export function createJobClass({ Meteor, isTest }) {
   }
 
   if (isTest) {
-    return { Job, JobQueue, methodCall, optionsHelp, splitLongArray };
+    return { Job, JobQueue, methodCall, optionsHelp, splitLongArray, concatReduce };
   }
 
   return Job;
