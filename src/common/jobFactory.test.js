@@ -509,19 +509,20 @@ describe("Job", () => {
       });
     });
 
-    // describe("_setImmediate", function () {
+    describe("_setImmediate", () => {
+      const { _setImmediate } = JobPrivate;
 
-    //   const _setImmediate = Job.__get__("_setImmediate");
-
-    //   return it("should invoke the provided callback with args", function (done) {
-    //     const cb = function (a, b) {
-    //       assert.equal(a, "foo");
-    //       assert.equal(b, "bar");
-    //       return done();
-    //     };
-    //     return _setImmediate(cb, "foo", "bar");
-    //   });
-    // });
+      it("should invoke the provided callback with args", (done) => (
+        new Promise((resolve) => {
+          const cb = (a, b) => {
+            expect(a).toBe("foo");
+            expect(b).toBe("bar");
+            resolve();
+          };
+          _setImmediate(cb, "foo", "bar");
+        })
+      ));
+    });
 
     // return describe("_setInterval", function () {
 
