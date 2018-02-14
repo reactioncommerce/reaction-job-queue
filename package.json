@@ -1,5 +1,5 @@
 {
-  "name": "reaction-job-queue",
+  "name": "@reactioncommerce/job-queue",
   "version": "1.0.0",
   "description": "Reaction job queue collection",
   "main": "./dist/node/index.js",
