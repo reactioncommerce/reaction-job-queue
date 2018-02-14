@@ -36,16 +36,16 @@ export function createJobCollectionClass({ Meteor, Job, JobCollectionBaseClass }
       this._errorListener = this.events.on("error", this._onError);
 
       // Add events for all individual successful DDP methods
-      this._methodErrorDispatch = this.events.on("error", (msg) => {
-        return this.events.emit(msg.method, msg);
-      });
+      this._methodErrorDispatch = this.events.on("error", (msg) => (
+        this.events.emit(msg.method, msg)
+      ));
 
       this._callListener = this.events.on("call", this._onCall);
 
       // Add events for all individual successful DDP methods
-      this._methodEventDispatch = this.events.on("call", (msg) => {
-        return this.events.emit(msg.method, msg);
-      });
+      this._methodEventDispatch = this.events.on("call", (msg) => (
+        this.events.emit(msg.method, msg)
+      ));
 
       this.stopped = true;
 
