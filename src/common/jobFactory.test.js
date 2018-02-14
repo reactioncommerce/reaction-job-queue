@@ -1,10 +1,13 @@
+import { resolve } from "url";
+
+const Fiber = require("fibers");
 const { createJobClass } = require("./jobFactory");
 
-const Job = createJobClass({});
+const { Job, ...JobPrivate } = createJobClass({ isTest: true });
 
 class DDP {
-  call = (name, params, cb = null) => {
-    if (cb === null || typeof cb !== "function") {
+  call(name, params, cb = null) {
+    if (cb === null || typeof cb !== "function") {  
       switch (name) {
         case "root_true":
           return true;
@@ -36,6 +39,22 @@ class DDP {
       }
     }
   }
+
+//   connect() {
+//     return process.nextTick(() => cb(null));
+//   }
+
+//   close() {
+//     return process.nextTick(() => cb(null));
+//   }
+
+//   subscribe() {
+//     return process.nextTick(() => cb(null));
+//   }
+
+//   observe() {
+//     return process.nextTick(() => cb(null));
+//   }
 }
 
 describe("Job", () => {
@@ -73,78 +92,469 @@ describe("Job", () => {
   //   expect(Job.processJobs).toEqual(Job.JobQueue);
   // });
 
+  describe("setDDP", () => {
+    const ddp = new DDP();
 
-});
-
-describe("setDDP", () => {
-  const ddp = new DDP();
-
-  describe("default setup", () => {
-    it("throws if given a non-ddp object", () => {
-      expect(() => Job.setDDP({})).toThrow(/Bad ddp object/);
-    });
-
-    it("properly sets the default _ddp_apply class variable", () => {
-      return new Promise((resolve) => {
-        const spy = jest.spyOn(ddp, "call");
-        Job.setDDP(ddp);
-
-        Job._ddp_apply("test", [], () => {
-          expect(spy).toHaveBeenCalledTimes(1);
-          spy.mockClear();
-          resolve();
-        });
+    describe("default setup", () => {
+      it("throws if given a non-ddp object", () => {
+        expect(() => Job.setDDP({})).toThrow(/Bad ddp object/);
       });
-    });
 
-    it("fails if subsequently called with a collection name", () => {
-      expect(() => Job.setDDP(ddp, "test1")).toThrow(/Job.setDDP must specify/);
-    });
+      it("properly sets the default _ddp_apply class variable", () => {
+        return new Promise((resolve) => {
+          const spy = jest.spyOn(ddp, "call");
+          Job.setDDP(ddp);
 
-    afterAll(() => {
-      Job._ddp_apply = undefined; // eslint-disable-line camelcase
-    });
-  });
-
-  describe("setup with collection name", () => {
-    it("properly sets the default _ddp_apply class variable", () => {
-      return new Promise((resolve) => {
-        const spy = jest.spyOn(ddp, "call");
-        Job.setDDP(ddp, "test1");
-
-        Job._ddp_apply.test1("test", [], () => {
-          expect(spy).toHaveBeenCalledTimes(1);
-          spy.mockClear();
-          resolve();
-        });
-      });
-    });
-
-
-    it("properly sets the _ddp_apply class variable when called with array", () => (
-      new Promise((resolve) => {
-        const spy = jest.spyOn(ddp, "call");
-        Job.setDDP(ddp, ["test2", "test3"]);
-
-        Job._ddp_apply.test2("test", [], () => {
-          Job._ddp_apply.test3("test", [], () => {
-            expect(spy).toHaveBeenCalledTimes(2);
+          Job._ddp_apply("test", [], () => {
+            expect(spy).toHaveBeenCalledTimes(1);
             spy.mockClear();
             resolve();
           });
         });
-      })
-    ));
+      });
 
-    it("fails if subsequently called without a collection name", () => {
-      expect(() => Job.setDDP(ddp)).toThrow(/Job.setDDP must specify/);
+      it("fails if subsequently called with a collection name", () => {
+        expect(() => Job.setDDP(ddp, "test1")).toThrow(/Job.setDDP must specify/);
+      });
+
+      afterAll(() => {
+        Job._ddp_apply = undefined; // eslint-disable-line camelcase
+      });
     });
 
-    afterAll(() => {
-      Job._ddp_apply = undefined; // eslint-disable-line camelcase
+    describe("setup with collection name", () => {
+      it("properly sets the default _ddp_apply class variable", () => {
+        return new Promise((resolve) => {
+          const spy = jest.spyOn(ddp, "call");
+          Job.setDDP(ddp, "test1");
+
+          Job._ddp_apply.test1("test", [], () => {
+            expect(spy).toHaveBeenCalledTimes(1);
+            spy.mockClear();
+            resolve();
+          });
+        });
+      });
+
+
+      it("properly sets the _ddp_apply class variable when called with array", () => (
+        new Promise((resolve) => {
+          const spy = jest.spyOn(ddp, "call");
+          Job.setDDP(ddp, ["test2", "test3"]);
+
+          Job._ddp_apply.test2("test", [], () => {
+            Job._ddp_apply.test3("test", [], () => {
+              expect(spy).toHaveBeenCalledTimes(2);
+              spy.mockClear();
+              resolve();
+            });
+          });
+        })
+      ));
+
+      it("fails if subsequently called without a collection name", () => {
+        expect(() => Job.setDDP(ddp)).toThrow(/Job.setDDP must specify/);
+      });
+
+      afterAll(() => {
+        Job._ddp_apply = undefined; // eslint-disable-line camelcase
+      });
     });
   });
+
+  // describe("Fiber support", () => {
+  //   const ddp = new DDP();
+
+  //   it("accepts a valid collection name and Fiber object and properly yields and runs", () => {
+  //     const spy = jest.spyOn(ddp, "call");
+  //     Job.setDDP(ddp, "test1", Fiber);
+
+  //     const fib = Fiber(() => Job._ddp_apply.test1("test", []));
+  //     fib.run();
+
+  //     expect(spy).toHaveBeenCalledTimes(1);
+  //     spy.mockClear();
+  //   });
+
+  //   // it("accepts a default collection name and valid Fiber object and properly yields and runs", () => {
+  //   //   const spy = jest.spyOn(ddp, "call");
+  //   //   Job.setDDP(ddp, Fiber);
+
+  //   //   const fib = Fiber(() => Job._ddp_apply("test", []));
+  //   //   fib.run();
+  //   //   expect(spy).toHaveBeenCalledTimes(1);
+  //   //   spy.mockClear();
+
+  //   // });
+
+  //   it("properly returns values from method calls", () => (
+  //     new Promise((resolve) => {
+  //       Job.setDDP(ddp, Fiber);
+
+  //       const fib = Fiber(() => {
+  //         expect(Job._ddp_apply("root_true", [])).toBeTruthy();
+  //         expect(Job._ddp_apply("root_false", [])).toBeFalsy();
+  //         // expect(Job._ddp_apply("root_param", [["a", 1, null]])).toEqual(["a", 1, null]);
+  //         resolve();
+  //       });
+
+  //       fib.run();
+  //     })
+  //   ));
+
+  //   it("properly propagates thrown errors within a Fiber", () => (
+  //     new Promise((resolve) => {
+  //       Job.setDDP(ddp, Fiber);
+
+  //       const fib = Fiber(() => {
+  //         expect(() => Job._ddp_apply("root_error", [])).toThrow(/Method failed/);
+  //         expect(() => Job._ddp_apply("bad_method", [])).toThrow(/Bad method in call/);
+  //         resolve();
+  //       });
+
+  //       fib.run();
+  //     })
+  //   ));
+
+  //   afterEach(() => {
+  //     Job._ddp_apply = undefined;
+  //   });
+  // });
+
+  describe("private function", () => {
+    // Note! These are internal helper functions, NOT part of the external API!
+    describe("methodCall", () => {
+
+      const ddp = new DDP();
+      let spy;
+
+      beforeAll(() => {
+        spy = jest.spyOn(ddp, "call");
+        Job.setDDP(ddp);
+      });
+
+      const { methodCall } = JobPrivate;
+
+      it("should be a function", () => {
+        expect(typeof methodCall).toBe("function");
+      });
+
+      it("should invoke the correct ddp method", () => (
+        new Promise((resolve) => {
+          methodCall("root", "true", [], (err, res) => {
+            expect(spy).toHaveBeenCalledTimes(1);
+            expect(spy.mock.calls[0][0]).toBe("root_true");
+            expect(res).toBeTruthy();
+            resolve();
+          });
+        })
+      ));
+
+      it("should pass the correct method parameters", () => (
+        new Promise((resolve) => {
+          const params = ["a", 1, [1, 2, 3], { foo: "bar" }];
+
+          methodCall("root", "param", params, (err, res) => {
+            expect(spy).toHaveBeenCalledTimes(1);
+            expect(spy.mock.calls[0][0]).toEqual("root_param");
+            expect(spy.mock.calls[0][1]).toEqual(params);
+            expect(res).toBe("a");
+            resolve();
+          });
+        })
+      ));
+
+      it("should invoke the after callback when provided", () => (
+        new Promise((resolve) => {
+          const after = jest.fn(() => true); // sinon.stub().returns(true);
+          return methodCall("root", "false", [], (err, res) => {
+            expect(spy).toHaveBeenCalledTimes(1);
+            expect(spy.mock.calls[0][0]).toEqual("root_false");
+            expect(spy.mock.calls[0][1]).toEqual([]);
+            expect(after).toHaveBeenCalledTimes(1);
+            expect(res).toBe(true);
+            resolve();
+          }, after);
+        })
+      ));
+
+      // it("shouldn't invoke the after callback when error", function (done) {
+      //   const after = sinon.stub().returns(true);
+      //   return methodCall("root", "error", [], function (err, res) {
+      //     assert(ddp.call.calledOnce);
+      //     assert(ddp.call.calledWith("root_error", []));
+      //     assert.equal(after.callCount, 0, "After shouldn't be called");
+      //     assert.isUndefined(res, "Result isn't undefined");
+      //     assert.throws((function () {
+      //       throw err;
+      //     }), /Method failed/);
+      //     return done();
+      //   }, after);
+      // });
+
+      // it("should invoke the correct ddp method without callback", function () {
+      //   const res = methodCall("root", "true", []);
+      //   assert(ddp.call.calledOnce);
+      //   assert(ddp.call.calledWith("root_true"));
+      //   return assert.isTrue(res);
+      // });
+
+      // it("should pass the correct method parameters without callback", function () {
+      //   const res = methodCall("root", "param", [
+      //     "a",
+      //     1,
+      //     [
+      //       1, 2, 3
+      //     ], {
+      //       foo: "bar"
+      //     }
+      //   ]);
+      //   assert(ddp.call.calledOnce);
+      //   assert(ddp.call.calledWith("root_param", [
+      //     "a",
+      //     1,
+      //     [
+      //       1, 2, 3
+      //     ], {
+      //       foo: "bar"
+      //     }
+      //   ]));
+      //   return assert.equal(res, "a");
+      // });
+
+      // it("should invoke the after callback when provided without callback", function () {
+      //   const after = sinon.stub().returns(true);
+      //   const res = methodCall("root", "false", [], undefined, after);
+      //   assert(ddp.call.calledOnce);
+      //   assert(ddp.call.calledWith("root_false", []));
+      //   assert(after.calledOnce);
+      //   return assert.isTrue(res);
+      // });
+
+      // it("should throw on error when invoked without callback", function () {
+      //   const after = sinon.stub().returns(true);
+      //   let res = undefined;
+      //   assert.throws((() => res = methodCall("root", "error", [], undefined, after)), /Method failed/);
+      //   assert(ddp.call.calledOnce);
+      //   assert(ddp.call.calledWith("root_error", []));
+      //   assert.equal(after.callCount, 0, "After shouldn't be called");
+      //   return assert.isUndefined(res, "Result isn't undefined");
+      // });
+
+      afterEach(() => ddp.call.mockClear());
+
+      afterAll(() => {
+        Job._ddp_apply = undefined
+      });
+    });
+
+    // describe("optionsHelp", function () {
+
+    //   const optionsHelp = Job.__get__("optionsHelp");
+    //   const foo = {
+    //     bar: "bat"
+    //   };
+    //   const gizmo = function () { };
+
+    //   it("should return options and a callback when both are provided", function () {
+    //     const res = optionsHelp([foo], gizmo);
+    //     return assert.deepEqual(res, [foo, gizmo]);
+    //   });
+
+    //   it("should handle a missing callback and return only options", function () {
+    //     const res = optionsHelp([foo]);
+    //     return assert.deepEqual(res, [foo, undefined]);
+    //   });
+
+    //   it("should handle missing options and return empty options and the callback", function () {
+    //     const res = optionsHelp([], gizmo);
+    //     return assert.deepEqual(res, [{}, gizmo]);
+    //   });
+
+    //   it("should handle when both options and callback are missing", function () {
+    //     const res = optionsHelp([], undefined);
+    //     return assert.deepEqual(res, [{}, undefined]);
+    //   });
+
+    //   it("should throw an error when an invalid callback is provided", () => assert.throws((() => optionsHelp([foo], 5)), /options not an object or bad callback/));
+
+    //   it("should throw an error when a non-array is passed for options", () => assert.throws((() => optionsHelp(foo, gizmo)), /must be an Array with zero or one elements/));
+
+    //   return it("should throw an error when a bad options array is passed", () => assert.throws((() => optionsHelp([
+    //     foo, 5
+    //   ], gizmo)), /must be an Array with zero or one elements/));
+    // });
+
+
+    // describe("splitLongArray", function () {
+
+    //   const splitLongArray = Job.__get__("splitLongArray");
+
+    //   const longArray = [
+    //     0,
+    //     1,
+    //     2,
+    //     3,
+    //     4,
+    //     5,
+    //     6,
+    //     7,
+    //     8,
+    //     9,
+    //     10,
+    //     11
+    //   ];
+
+    //   it("should properly split an array", function () {
+    //     const res = splitLongArray(longArray, 4);
+    //     return assert.deepEqual(res, [
+    //       [
+    //         0, 1, 2, 3
+    //       ],
+    //       [
+    //         4, 5, 6, 7
+    //       ],
+    //       [8, 9, 10, 11]
+    //     ]);
+    //   });
+
+    //   it("should handle remainders correctly", function () {
+    //     const res = splitLongArray(longArray, 5);
+    //     return assert.deepEqual(res, [
+    //       [
+    //         0, 1, 2, 3, 4
+    //       ],
+    //       [
+    //         5, 6, 7, 8, 9
+    //       ],
+    //       [10, 11]
+    //     ]);
+    //   });
+
+    //   it("should handle an empty array", function () {
+    //     const res = splitLongArray([], 5);
+    //     return assert.deepEqual(res, []);
+    //   });
+
+    //   it("should handle a single element array", function () {
+    //     const res = splitLongArray([0], 5);
+    //     return assert.deepEqual(res, [
+    //       [0]
+    //     ]);
+    //   });
+
+    //   it("should throw if not given an array", () => assert.throws((() => splitLongArray({
+    //     foo: "bar"
+    //   }, 5)), /splitLongArray: bad params/));
+
+    //   it("should throw if given an out of range max value", () => assert.throws((() => splitLongArray(longArray, 0)), /splitLongArray: bad params/));
+
+    //   return it("should throw if given an invalid max value", () => assert.throws((() => splitLongArray(longArray, "cow")), /splitLongArray: bad params/));
+    // });
+
+    // describe("concatReduce", function () {
+    //   const concatReduce = Job.__get__("concatReduce");
+
+    //   it("should concat a to b", () => assert.deepEqual(concatReduce([1], 2), [1, 2]));
+
+    //   return it("should work with non array for the first param", () => assert.deepEqual(concatReduce(1, 2), [1, 2]));
+    // });
+
+    // describe("reduceCallbacks", function () {
+    //   const reduceCallbacks = Job.__get__("reduceCallbacks");
+
+    //   it("should return undefined if given a falsy callback", () => assert.isUndefined(reduceCallbacks(undefined, 5)));
+
+    //   it("should properly absorb the specified number of callbacks", function () {
+    //     const spy = sinon.spy();
+    //     const cb = reduceCallbacks(spy, 3);
+    //     cb(null, true);
+    //     cb(null, false);
+    //     cb(null, true);
+    //     assert(spy.calledOnce);
+    //     return assert(spy.calledWith(null, true));
+    //   });
+
+    //   it("should properly reduce the callback results", function () {
+    //     const spy = sinon.spy();
+    //     const cb = reduceCallbacks(spy, 3);
+    //     cb(null, false);
+    //     cb(null, false);
+    //     cb(null, false);
+    //     assert(spy.calledOnce);
+    //     return assert(spy.calledWith(null, false));
+    //   });
+
+    //   it("should properly reduce with a custom reduce function", function () {
+    //     const concatReduce = Job.__get__("concatReduce");
+    //     const spy = sinon.spy();
+    //     const cb = reduceCallbacks(spy, 3, concatReduce, []);
+    //     cb(null, false);
+    //     cb(null, true);
+    //     cb(null, false);
+    //     assert(spy.calledOnce, "callback called too many times");
+    //     return assert(spy.calledWith(null, [false, true, false]), "Returned wrong result");
+    //   });
+
+    //   it("should throw if called too many times", function () {
+    //     const spy = sinon.spy();
+    //     const cb = reduceCallbacks(spy, 2);
+    //     cb(null, true);
+    //     cb(null, true);
+    //     return assert.throws(cb, /reduceCallbacks callback invoked more than requested/);
+    //   });
+
+    //   it("should throw if given a non-function callback", () => assert.throws((() => reduceCallbacks(5)), /Bad params given to reduceCallbacks/));
+
+    //   it("should throw if given an invalid number of callbacks to absorb", () => assert.throws((() => reduceCallbacks((function () { }), "cow")), /Bad params given to reduceCallbacks/));
+
+    //   it("should throw if given an out of range number of callbacks to absorb", () => assert.throws((() => reduceCallbacks((function () { }), 0)), /Bad params given to reduceCallbacks/));
+
+    //   return it("should throw if given a non-function reduce", () => assert.throws((() => reduceCallbacks((function () { }), 5, 5)), /Bad params given to reduceCallbacks/));
+    // });
+
+    // describe("_setImmediate", function () {
+
+    //   const _setImmediate = Job.__get__("_setImmediate");
+
+    //   return it("should invoke the provided callback with args", function (done) {
+    //     const cb = function (a, b) {
+    //       assert.equal(a, "foo");
+    //       assert.equal(b, "bar");
+    //       return done();
+    //     };
+    //     return _setImmediate(cb, "foo", "bar");
+    //   });
+    // });
+
+    // return describe("_setInterval", function () {
+
+    //   const _setInterval = Job.__get__("_setInterval");
+    //   const _clearInterval = Job.__get__("_clearInterval");
+
+    //   return it("should invoke the provided callback repeatedly with args", function (done) {
+    //     let cancel = null;
+    //     let count = 0;
+    //     const cb = function (a, b) {
+    //       assert.equal(a, "foo");
+    //       assert.equal(b, "bar");
+    //       count++;
+    //       if (count === 2) {
+    //         _clearInterval(cancel);
+    //         return done();
+    //       } else if (count > 2) {
+    //         throw "Interval called too many times";
+    //       }
+    //     };
+
+    //     return cancel = _setInterval(cb, 10, "foo", "bar");
+    //   });
+    // });
+  });
 });
+
+
+
 
 // /*
 //  * decaffeinate suggestions:
@@ -375,333 +785,8 @@ describe("setDDP", () => {
 //     return afterEach(() => Job._ddp_apply = undefined);
 //   });
 
-//   describe("private function", function () {
 
-//     // Note! These are internal helper functions, NOT part of the external API!
-//     describe("methodCall", function () {
 
-//       const ddp = new DDP();
-
-//       before(function () {
-//         sinon.spy(ddp, "call");
-//         return Job.setDDP(ddp);
-//       });
-
-//       const methodCall = Job.__get__("methodCall");
-
-//       it("should be a function", () => assert.isFunction(methodCall));
-
-//       it("should invoke the correct ddp method", done => methodCall("root", "true", [], function (err, res) {
-//         assert(ddp.call.calledOnce);
-//         assert(ddp.call.calledWith("root_true"));
-//         assert.isTrue(res);
-//         return done();
-//       }));
-
-//       it("should pass the correct method parameters", done => methodCall("root", "param", [
-//         "a",
-//         1,
-//         [
-//           1, 2, 3
-//         ], {
-//           foo: "bar"
-//         }
-//       ], function (err, res) {
-//         assert(ddp.call.calledOnce);
-//         assert(ddp.call.calledWith("root_param", [
-//           "a",
-//           1,
-//           [
-//             1, 2, 3
-//           ], {
-//             foo: "bar"
-//           }
-//         ]));
-//         assert.equal(res, "a");
-//         return done();
-//       }));
-
-//       it("should invoke the after callback when provided", function (done) {
-//         const after = sinon.stub().returns(true);
-//         return methodCall("root", "false", [], function (err, res) {
-//           assert(ddp.call.calledOnce);
-//           assert(ddp.call.calledWith("root_false", []));
-//           assert(after.calledOnce);
-//           assert.isTrue(res);
-//           return done();
-//         }, after);
-//       });
-
-//       it("shouldn't invoke the after callback when error", function (done) {
-//         const after = sinon.stub().returns(true);
-//         return methodCall("root", "error", [], function (err, res) {
-//           assert(ddp.call.calledOnce);
-//           assert(ddp.call.calledWith("root_error", []));
-//           assert.equal(after.callCount, 0, "After shouldn't be called");
-//           assert.isUndefined(res, "Result isn't undefined");
-//           assert.throws((function () {
-//             throw err;
-//           }), /Method failed/);
-//           return done();
-//         }, after);
-//       });
-
-//       it("should invoke the correct ddp method without callback", function () {
-//         const res = methodCall("root", "true", []);
-//         assert(ddp.call.calledOnce);
-//         assert(ddp.call.calledWith("root_true"));
-//         return assert.isTrue(res);
-//       });
-
-//       it("should pass the correct method parameters without callback", function () {
-//         const res = methodCall("root", "param", [
-//           "a",
-//           1,
-//           [
-//             1, 2, 3
-//           ], {
-//             foo: "bar"
-//           }
-//         ]);
-//         assert(ddp.call.calledOnce);
-//         assert(ddp.call.calledWith("root_param", [
-//           "a",
-//           1,
-//           [
-//             1, 2, 3
-//           ], {
-//             foo: "bar"
-//           }
-//         ]));
-//         return assert.equal(res, "a");
-//       });
-
-//       it("should invoke the after callback when provided without callback", function () {
-//         const after = sinon.stub().returns(true);
-//         const res = methodCall("root", "false", [], undefined, after);
-//         assert(ddp.call.calledOnce);
-//         assert(ddp.call.calledWith("root_false", []));
-//         assert(after.calledOnce);
-//         return assert.isTrue(res);
-//       });
-
-//       it("should throw on error when invoked without callback", function () {
-//         const after = sinon.stub().returns(true);
-//         let res = undefined;
-//         assert.throws((() => res = methodCall("root", "error", [], undefined, after)), /Method failed/);
-//         assert(ddp.call.calledOnce);
-//         assert(ddp.call.calledWith("root_error", []));
-//         assert.equal(after.callCount, 0, "After shouldn't be called");
-//         return assert.isUndefined(res, "Result isn't undefined");
-//       });
-
-//       afterEach(() => ddp.call.reset());
-
-//       return after(() => Job._ddp_apply = undefined);
-//     });
-
-//     describe("optionsHelp", function () {
-
-//       const optionsHelp = Job.__get__("optionsHelp");
-//       const foo = {
-//         bar: "bat"
-//       };
-//       const gizmo = function () { };
-
-//       it("should return options and a callback when both are provided", function () {
-//         const res = optionsHelp([foo], gizmo);
-//         return assert.deepEqual(res, [foo, gizmo]);
-//       });
-
-//       it("should handle a missing callback and return only options", function () {
-//         const res = optionsHelp([foo]);
-//         return assert.deepEqual(res, [foo, undefined]);
-//       });
-
-//       it("should handle missing options and return empty options and the callback", function () {
-//         const res = optionsHelp([], gizmo);
-//         return assert.deepEqual(res, [{}, gizmo]);
-//       });
-
-//       it("should handle when both options and callback are missing", function () {
-//         const res = optionsHelp([], undefined);
-//         return assert.deepEqual(res, [{}, undefined]);
-//       });
-
-//       it("should throw an error when an invalid callback is provided", () => assert.throws((() => optionsHelp([foo], 5)), /options not an object or bad callback/));
-
-//       it("should throw an error when a non-array is passed for options", () => assert.throws((() => optionsHelp(foo, gizmo)), /must be an Array with zero or one elements/));
-
-//       return it("should throw an error when a bad options array is passed", () => assert.throws((() => optionsHelp([
-//         foo, 5
-//       ], gizmo)), /must be an Array with zero or one elements/));
-//     });
-
-//     describe("splitLongArray", function () {
-
-//       const splitLongArray = Job.__get__("splitLongArray");
-
-//       const longArray = [
-//         0,
-//         1,
-//         2,
-//         3,
-//         4,
-//         5,
-//         6,
-//         7,
-//         8,
-//         9,
-//         10,
-//         11
-//       ];
-
-//       it("should properly split an array", function () {
-//         const res = splitLongArray(longArray, 4);
-//         return assert.deepEqual(res, [
-//           [
-//             0, 1, 2, 3
-//           ],
-//           [
-//             4, 5, 6, 7
-//           ],
-//           [8, 9, 10, 11]
-//         ]);
-//       });
-
-//       it("should handle remainders correctly", function () {
-//         const res = splitLongArray(longArray, 5);
-//         return assert.deepEqual(res, [
-//           [
-//             0, 1, 2, 3, 4
-//           ],
-//           [
-//             5, 6, 7, 8, 9
-//           ],
-//           [10, 11]
-//         ]);
-//       });
-
-//       it("should handle an empty array", function () {
-//         const res = splitLongArray([], 5);
-//         return assert.deepEqual(res, []);
-//       });
-
-//       it("should handle a single element array", function () {
-//         const res = splitLongArray([0], 5);
-//         return assert.deepEqual(res, [
-//           [0]
-//         ]);
-//       });
-
-//       it("should throw if not given an array", () => assert.throws((() => splitLongArray({
-//         foo: "bar"
-//       }, 5)), /splitLongArray: bad params/));
-
-//       it("should throw if given an out of range max value", () => assert.throws((() => splitLongArray(longArray, 0)), /splitLongArray: bad params/));
-
-//       return it("should throw if given an invalid max value", () => assert.throws((() => splitLongArray(longArray, "cow")), /splitLongArray: bad params/));
-//     });
-
-//     describe("concatReduce", function () {
-//       const concatReduce = Job.__get__("concatReduce");
-
-//       it("should concat a to b", () => assert.deepEqual(concatReduce([1], 2), [1, 2]));
-
-//       return it("should work with non array for the first param", () => assert.deepEqual(concatReduce(1, 2), [1, 2]));
-//     });
-
-//     describe("reduceCallbacks", function () {
-//       const reduceCallbacks = Job.__get__("reduceCallbacks");
-
-//       it("should return undefined if given a falsy callback", () => assert.isUndefined(reduceCallbacks(undefined, 5)));
-
-//       it("should properly absorb the specified number of callbacks", function () {
-//         const spy = sinon.spy();
-//         const cb = reduceCallbacks(spy, 3);
-//         cb(null, true);
-//         cb(null, false);
-//         cb(null, true);
-//         assert(spy.calledOnce);
-//         return assert(spy.calledWith(null, true));
-//       });
-
-//       it("should properly reduce the callback results", function () {
-//         const spy = sinon.spy();
-//         const cb = reduceCallbacks(spy, 3);
-//         cb(null, false);
-//         cb(null, false);
-//         cb(null, false);
-//         assert(spy.calledOnce);
-//         return assert(spy.calledWith(null, false));
-//       });
-
-//       it("should properly reduce with a custom reduce function", function () {
-//         const concatReduce = Job.__get__("concatReduce");
-//         const spy = sinon.spy();
-//         const cb = reduceCallbacks(spy, 3, concatReduce, []);
-//         cb(null, false);
-//         cb(null, true);
-//         cb(null, false);
-//         assert(spy.calledOnce, "callback called too many times");
-//         return assert(spy.calledWith(null, [false, true, false]), "Returned wrong result");
-//       });
-
-//       it("should throw if called too many times", function () {
-//         const spy = sinon.spy();
-//         const cb = reduceCallbacks(spy, 2);
-//         cb(null, true);
-//         cb(null, true);
-//         return assert.throws(cb, /reduceCallbacks callback invoked more than requested/);
-//       });
-
-//       it("should throw if given a non-function callback", () => assert.throws((() => reduceCallbacks(5)), /Bad params given to reduceCallbacks/));
-
-//       it("should throw if given an invalid number of callbacks to absorb", () => assert.throws((() => reduceCallbacks((function () { }), "cow")), /Bad params given to reduceCallbacks/));
-
-//       it("should throw if given an out of range number of callbacks to absorb", () => assert.throws((() => reduceCallbacks((function () { }), 0)), /Bad params given to reduceCallbacks/));
-
-//       return it("should throw if given a non-function reduce", () => assert.throws((() => reduceCallbacks((function () { }), 5, 5)), /Bad params given to reduceCallbacks/));
-//     });
-
-//     describe("_setImmediate", function () {
-
-//       const _setImmediate = Job.__get__("_setImmediate");
-
-//       return it("should invoke the provided callback with args", function (done) {
-//         const cb = function (a, b) {
-//           assert.equal(a, "foo");
-//           assert.equal(b, "bar");
-//           return done();
-//         };
-//         return _setImmediate(cb, "foo", "bar");
-//       });
-//     });
-
-//     return describe("_setInterval", function () {
-
-//       const _setInterval = Job.__get__("_setInterval");
-//       const _clearInterval = Job.__get__("_clearInterval");
-
-//       return it("should invoke the provided callback repeatedly with args", function (done) {
-//         let cancel = null;
-//         let count = 0;
-//         const cb = function (a, b) {
-//           assert.equal(a, "foo");
-//           assert.equal(b, "bar");
-//           count++;
-//           if (count === 2) {
-//             _clearInterval(cancel);
-//             return done();
-//           } else if (count > 2) {
-//             throw "Interval called too many times";
-//           }
-//         };
-
-//         return cancel = _setInterval(cb, 10, "foo", "bar");
-//       });
-//     });
-//   });
 
 //   describe("Job constructor", function () {
 
