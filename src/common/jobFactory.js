@@ -47,7 +47,7 @@ export function createJobClass({ Meteor, isTest }) {
         !(options.length < 2)) {
         throw new Error("options... in optionsHelp must be an Array with zero or one elements");
       }
-      options = options && options[0] || {};
+      options = (options && options[0]) || {};
     }
     if (typeof options !== "object") {
       throw new Error("in optionsHelp options not an object or bad callback");
@@ -216,7 +216,7 @@ export function createJobClass({ Meteor, isTest }) {
         throw new Error("JobQueue: Invalid prefetch, must be a positive integer");
       }
 
-      this.workTimeout = options.workTimeout;  // No default
+      this.workTimeout = options.workTimeout; // No default
       if (this.workTimeout && !(isInteger(this.workTimeout) && (this.workTimeout >= 0))) {
         throw new Error("JobQueue: Invalid workTimeout, must be a positive integer");
       }
@@ -270,7 +270,7 @@ export function createJobClass({ Meteor, isTest }) {
     // eslint-disable-next-line camelcase
     _only_once(fn) {
       let called = false;
-      return function () {
+      return function (...args) {
         if (called) {
           this.errorCallback(new Error("Worker callback called multiple times"));
           if (this.callbackStrict) {
@@ -278,7 +278,7 @@ export function createJobClass({ Meteor, isTest }) {
           }
         }
         called = true;
-        return fn.apply(this, arguments);
+        return fn.apply(this, args);
       }.bind(this);
     }
 
@@ -290,7 +290,7 @@ export function createJobClass({ Meteor, isTest }) {
         } else {
           job = this._tasks.shift();
         }
-        job._taskId = `Task_${this._taskNumber++}`;
+        job._taskId = `Task_${this._taskNumber += 1}`;
         this._workers[job._taskId] = job;
         const next = () => {
           delete this._workers[job._taskId];
@@ -312,7 +312,7 @@ export function createJobClass({ Meteor, isTest }) {
         this._stoppingGetWork = callback;
         return this._stoppingGetWork;
       }
-      return _setImmediate(callback);  // No Zalgo, thanks
+      return _setImmediate(callback); // No Zalgo, thanks
     }
 
     _waitForTasks(callback) {
@@ -320,15 +320,15 @@ export function createJobClass({ Meteor, isTest }) {
         this._stoppingTasks = callback;
         return this._stoppingTasks;
       }
-      return _setImmediate(callback);  // No Zalgo, thanks
+      return _setImmediate(callback); // No Zalgo, thanks
     }
 
     _failJobs(tasks, callback) {
-      if (tasks.length === 0) { _setImmediate(callback); }  // No Zalgo, thanks
+      if (tasks.length === 0) { _setImmediate(callback); } // No Zalgo, thanks
       let count = 0;
       return Array.from(tasks).map((job) =>
         job.fail("Worker shutdown", () => {
-          count++;
+          count += 1;
           if (count === tasks.length) {
             return callback();
           }
@@ -341,7 +341,7 @@ export function createJobClass({ Meteor, isTest }) {
         let tasks = this._tasks;
         this._tasks = [];
         for (const i in this._workers) {
-          if ({}.hasOwnProperty(this._workers[i])) {
+          if ({}.hasOwnProperty.call(this._workers, i)) {
             const r = this._workers[i];
             tasks = tasks.concat(r);
           }
@@ -355,16 +355,16 @@ export function createJobClass({ Meteor, isTest }) {
       return this._stopGetWork(() => {
         const tasks = this._tasks;
         this._tasks = [];
-        return this._waitForTasks(() => {
-          return this._failJobs(tasks, callback);
-        });
+        return this._waitForTasks(() => (
+          this._failJobs(tasks, callback)
+        ));
       });
     }
 
     _soft(callback) {
-      return this._stopGetWork(() => {
-        return this._waitForTasks(callback);
-      });
+      return this._stopGetWork(() => (
+        this._waitForTasks(callback)
+      ));
     }
 
     length() { return this._tasks.length; }
@@ -394,7 +394,7 @@ export function createJobClass({ Meteor, isTest }) {
       if (!(this.pollInterval >= Job.forever)) {
         this._interval = _setInterval(this._getWork.bind(this), this.pollInterval);
       }
-      for (let w = 1, end = this.concurrency, asc = end >= 1; asc ? w <= end : w >= end; asc ? w++ : w--) {
+      for (let w = 1, end = this.concurrency, asc = end >= 1; asc ? w <= end : w >= end; asc ? w += 1 : w -= 1) {
         _setImmediate(this._process.bind(this));
       }
       return this;
@@ -417,9 +417,7 @@ export function createJobClass({ Meteor, isTest }) {
       if (!options.quiet) { options.quiet = false; }
       if (!cb) {
         if (!options.quiet) { console.warn("using default shutdown callback!"); }
-        cb = () => {
-          return console.warn("Shutdown complete");
-        };
+        cb = () => console.warn("Shutdown complete");
       }
 
       switch (options.level) {
@@ -466,7 +464,7 @@ export function createJobClass({ Meteor, isTest }) {
       this.jobStatusRemovable = ["cancelled", "completed", "failed"];
       this.jobStatusRestartable = ["cancelled", "failed"];
 
-      this.ddpMethods = ["startJobs", "stopJobs",  // Deprecated!
+      this.ddpMethods = ["startJobs", "stopJobs", // Deprecated!
         "startJobServer", "shutdownJobServer",
         "jobRemove", "jobPause", "jobResume", "jobReady",
         "jobCancel", "jobRestart", "jobSave", "jobRerun", "getWork",
@@ -476,8 +474,8 @@ export function createJobClass({ Meteor, isTest }) {
 
       // These are the four levels of the allow/deny permission heirarchy
       this.ddpMethodPermissions = {
-        startJobs: ["startJobs", "admin"],  // Deprecated!
-        stopJobs: ["stopJobs", "admin"],    // Deprecated!
+        startJobs: ["startJobs", "admin"], // Deprecated!
+        stopJobs: ["stopJobs", "admin"], // Deprecated!
         startJobServer: ["startJobServer", "admin"],
         shutdownJobServer: ["shutdownJobServer", "admin"],
         jobRemove: ["jobRemove", "admin", "manager"],
@@ -649,7 +647,7 @@ export function createJobClass({ Meteor, isTest }) {
 
       [options, cb] = Array.from(optionsHelp(options, cb));
       if (!options.getLog) { options.getLog = false; }
-      return methodCall(root, "getJob", [id, options], cb, doc => {
+      return methodCall(root, "getJob", [id, options], cb, (doc) => {
         if (doc) {
           return new Job(root, doc);
         }
@@ -870,7 +868,7 @@ export function createJobClass({ Meteor, isTest }) {
         throw new Error(`new Job: bad parameter(s), ${this.root} (${typeof this.root}), ${type} (${typeof type}), ${data} (${typeof data}), ${doc} (${typeof doc})`);
       } else if (doc.type && doc.data) { // This case is used to create local Job objects from DDP calls
         this._doc = doc;
-      } else {  // This is the normal "create a new object" case
+      } else { // This is the normal "create a new object" case
         const time = new Date();
         this._doc = {
           runId: null,
@@ -926,7 +924,7 @@ export function createJobClass({ Meteor, isTest }) {
         depends = [];
       }
       this._doc.depends = depends;
-      this._doc.resolved = [];  // This is where prior depends go as they are satisfied
+      this._doc.resolved = []; // This is where prior depends go as they are satisfied
       return this;
     }
 
@@ -1107,9 +1105,9 @@ export function createJobClass({ Meteor, isTest }) {
       if (this._doc.log === null || this._doc.log === undefined) { this._doc.log = []; }
       this._doc.log.push({ time: new Date(), runId: null, level: options.level, message });
       if ((cb !== null) && (typeof cb === "function")) {
-        _setImmediate(cb, null, true);   // DO NOT release Zalgo
+        _setImmediate(cb, null, true); // DO NOT release Zalgo
       }
-      return this;  // Allow call chaining in this case
+      return this; // Allow call chaining in this case
     }
 
     // Indicate progress made for a running job. This is important for
@@ -1145,7 +1143,7 @@ export function createJobClass({ Meteor, isTest }) {
         } else if (this._doc._id === null || this._doc._id === undefined) {
           this._doc.progress = progress;
           if (typeof cb === "function") {
-            _setImmediate(cb, null, true);   // DO NOT release Zalgo
+            _setImmediate(cb, null, true); // DO NOT release Zalgo
           }
           return this;
         }
@@ -1253,7 +1251,7 @@ export function createJobClass({ Meteor, isTest }) {
 
       this._doc.status = "paused";
       if (typeof cb === "function") {
-        _setImmediate(cb, null, true);  // DO NOT release Zalgo
+        _setImmediate(cb, null, true); // DO NOT release Zalgo
       }
       return this;
     }
@@ -1272,7 +1270,7 @@ export function createJobClass({ Meteor, isTest }) {
       }
       this._doc.status = "waiting";
       if (typeof cb === "function") {
-        _setImmediate(cb, null, true);  // DO NOT release Zalgo
+        _setImmediate(cb, null, true); // DO NOT release Zalgo
       }
       return this;
     }
@@ -1373,7 +1371,7 @@ export function createJobClass({ Meteor, isTest }) {
       end = right - 1;
     }
 
-    for (let i = left; ascending ? i < end : i > end; ascending ? i++ : i--) {
+    for (let i = left; ascending ? i < end : i > end; ascending ? i += 1 : i -= 1) {
       range.push(i);
     }
     return range;
