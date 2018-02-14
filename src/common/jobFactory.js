@@ -123,7 +123,7 @@ export function createJobClass({ Meteor, isTest }) {
 
   // This smooths over the various different implementations...
   function _setImmediate(func, ...args) {
-    if ((typeof Meteor !== "undefined" && Meteor !== null ? Meteor.setTimeout : undefined) !== null) {
+    if (Meteor && Meteor.setTimeout) {
       return Meteor.setTimeout(func, 0, ...Array.from(args));
     } else if (typeof setImmediate !== "undefined" && setImmediate !== null) {
       return setImmediate(func, ...Array.from(args));
@@ -134,7 +134,7 @@ export function createJobClass({ Meteor, isTest }) {
   }
 
   function _setInterval(func, timeOut, ...args) {
-    if ((typeof Meteor !== "undefined" && Meteor !== null ? Meteor.setInterval : undefined) !== null) {
+    if (Meteor && Meteor.setInterval) {
       return Meteor.setInterval(func, timeOut, ...Array.from(args));
     }
 
@@ -143,7 +143,7 @@ export function createJobClass({ Meteor, isTest }) {
   }
 
   function _clearInterval(id) {
-    if ((typeof Meteor !== "undefined" && Meteor !== null ? Meteor.clearInterval : undefined) !== null) {
+    if (Meteor && Meteor.clearInterval) {
       return Meteor.clearInterval(id);
     }
 
