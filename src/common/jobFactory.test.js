@@ -422,13 +422,17 @@ describe("Job", () => {
       });
     });
 
-    // describe("concatReduce", function () {
-    //   const concatReduce = Job.__get__("concatReduce");
+    describe("concatReduce", () => {
+      const { concatReduce } = JobPrivate;
 
-    //   it("should concat a to b", () => assert.deepEqual(concatReduce([1], 2), [1, 2]));
+      it("should concat a to b", () => {
+        expect(concatReduce([1], 2)).toEqual([1, 2]);
+      });
 
-    //   return it("should work with non array for the first param", () => assert.deepEqual(concatReduce(1, 2), [1, 2]));
-    // });
+      it("should work with non array for the first param", () => {
+        expect(concatReduce(1, 2)).toEqual([1, 2]);
+      });
+    });
 
     // describe("reduceCallbacks", function () {
     //   const reduceCallbacks = Job.__get__("reduceCallbacks");
