@@ -224,7 +224,6 @@ describe("Job", () => {
   describe("private function", () => {
     // Note! These are internal helper functions, NOT part of the external API!
     describe("methodCall", () => {
-
       const ddp = new DDP();
       let spy;
 
@@ -253,7 +252,6 @@ describe("Job", () => {
       it("should pass the correct method parameters", () => (
         new Promise((resolve) => {
           const params = ["a", 1, [1, 2, 3], { foo: "bar" }];
-
           methodCall("root", "param", params, (err, res) => {
             expect(spy).toHaveBeenCalledTimes(1);
             expect(spy.mock.calls[0][0]).toEqual("root_param");
@@ -266,7 +264,7 @@ describe("Job", () => {
 
       it("should invoke the after callback when provided", () => (
         new Promise((resolve) => {
-          const after = jest.fn(() => true); // sinon.stub().returns(true);
+          const after = jest.fn(() => true);
           return methodCall("root", "false", [], (err, res) => {
             expect(spy).toHaveBeenCalledTimes(1);
             expect(spy.mock.calls[0][0]).toEqual("root_false");
@@ -278,73 +276,63 @@ describe("Job", () => {
         })
       ));
 
-      // it("shouldn't invoke the after callback when error", function (done) {
-      //   const after = sinon.stub().returns(true);
-      //   return methodCall("root", "error", [], function (err, res) {
-      //     assert(ddp.call.calledOnce);
-      //     assert(ddp.call.calledWith("root_error", []));
-      //     assert.equal(after.callCount, 0, "After shouldn't be called");
-      //     assert.isUndefined(res, "Result isn't undefined");
-      //     assert.throws((function () {
-      //       throw err;
-      //     }), /Method failed/);
-      //     return done();
-      //   }, after);
-      // });
+      it("shouldn't invoke the after callback when error", () => (
+        new Promise((resolve) => {
+          const after = jest.fn(() => true);
+          return methodCall("root", "error", [], (err, res) => {
+            expect(spy).toHaveBeenCalledTimes(1);
+            expect(spy.mock.calls[0][0]).toEqual("root_error");
+            expect(spy.mock.calls[0][1]).toEqual([]);
+            expect(after).toHaveBeenCalledTimes(0);
+            expect(res).toBeUndefined();
+            expect(() => { throw err; }).toThrow(/Method failed/);
+            resolve();
+          }, after);
+        })
+      ));
 
-      // it("should invoke the correct ddp method without callback", function () {
-      //   const res = methodCall("root", "true", []);
-      //   assert(ddp.call.calledOnce);
-      //   assert(ddp.call.calledWith("root_true"));
-      //   return assert.isTrue(res);
-      // });
+      it("should invoke the correct ddp method without callback", () => {
+        const res = methodCall("root", "true", []);
+        expect(spy).toHaveBeenCalledTimes(1);
+        expect(spy.mock.calls[0][0]).toEqual("root_true");
+        expect(res).toBe(true);
+        expect(res).toBe(true);
+      });
 
-      // it("should pass the correct method parameters without callback", function () {
-      //   const res = methodCall("root", "param", [
-      //     "a",
-      //     1,
-      //     [
-      //       1, 2, 3
-      //     ], {
-      //       foo: "bar"
-      //     }
-      //   ]);
-      //   assert(ddp.call.calledOnce);
-      //   assert(ddp.call.calledWith("root_param", [
-      //     "a",
-      //     1,
-      //     [
-      //       1, 2, 3
-      //     ], {
-      //       foo: "bar"
-      //     }
-      //   ]));
-      //   return assert.equal(res, "a");
-      // });
+      it("should pass the correct method parameters without callback", () => {
+        const params = ["a", 1, [1, 2, 3], { foo: "bar" }];
+        const res = methodCall("root", "param", params);
+        expect(spy).toHaveBeenCalledTimes(1);
+        expect(spy.mock.calls[0][0]).toEqual("root_param");
+        expect(spy.mock.calls[0][1]).toEqual(params);
+        expect(res).toBe("a");
+      });
 
-      // it("should invoke the after callback when provided without callback", function () {
-      //   const after = sinon.stub().returns(true);
-      //   const res = methodCall("root", "false", [], undefined, after);
-      //   assert(ddp.call.calledOnce);
-      //   assert(ddp.call.calledWith("root_false", []));
-      //   assert(after.calledOnce);
-      //   return assert.isTrue(res);
-      // });
+      it("should invoke the after callback when provided without callback", () => {
+        const after = jest.fn(() => true);
+        const res = methodCall("root", "false", [], undefined, after);
+        expect(spy).toHaveBeenCalledTimes(1);
+        expect(spy.mock.calls[0][0]).toEqual("root_false");
+        expect(spy.mock.calls[0][1]).toEqual([]);
+        expect(after).toHaveBeenCalledTimes(1);
+        expect(res).toBe(true);
+      });
 
-      // it("should throw on error when invoked without callback", function () {
-      //   const after = sinon.stub().returns(true);
-      //   let res = undefined;
-      //   assert.throws((() => res = methodCall("root", "error", [], undefined, after)), /Method failed/);
-      //   assert(ddp.call.calledOnce);
-      //   assert(ddp.call.calledWith("root_error", []));
-      //   assert.equal(after.callCount, 0, "After shouldn't be called");
-      //   return assert.isUndefined(res, "Result isn't undefined");
-      // });
+      it("should throw on error when invoked without callback", () => {
+        const after = jest.fn(() => true);
+        let res;
+        expect(() => { res = methodCall("root", "error", [], undefined, after); }).toThrow(/Method failed/);
+        expect(spy).toHaveBeenCalledTimes(1);
+        expect(spy.mock.calls[0][0]).toEqual("root_error");
+        expect(spy.mock.calls[0][1]).toEqual([]);
+        expect(after).toHaveBeenCalledTimes(0);
+        expect(res).toBeUndefined();
+      });
 
       afterEach(() => ddp.call.mockClear());
 
       afterAll(() => {
-        Job._ddp_apply = undefined
+        Job._ddp_apply = undefined; // eslint-disable-line camelcase
       });
     });
 
