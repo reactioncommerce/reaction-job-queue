@@ -336,42 +336,45 @@ describe("Job", () => {
       });
     });
 
-    // describe("optionsHelp", function () {
+    describe("optionsHelp", () => {
+      const { optionsHelp } = JobPrivate;
+      const foo = {
+        bar: "bat"
+      };
+      const gizmo = () => {};
 
-    //   const optionsHelp = Job.__get__("optionsHelp");
-    //   const foo = {
-    //     bar: "bat"
-    //   };
-    //   const gizmo = function () { };
+      it("should return options and a callback when both are provided", () => {
+        const res = optionsHelp([foo], gizmo);
+        expect(res).toEqual([foo, gizmo]);
+      });
 
-    //   it("should return options and a callback when both are provided", function () {
-    //     const res = optionsHelp([foo], gizmo);
-    //     return assert.deepEqual(res, [foo, gizmo]);
-    //   });
+      it("should handle a missing callback and return only options", () => {
+        const res = optionsHelp([foo]);
+        expect(res).toEqual([foo, undefined]);
+      });
 
-    //   it("should handle a missing callback and return only options", function () {
-    //     const res = optionsHelp([foo]);
-    //     return assert.deepEqual(res, [foo, undefined]);
-    //   });
+      it("should handle missing options and return empty options and the callback", () => {
+        const res = optionsHelp([], gizmo);
+        expect(res).toEqual([{}, gizmo]);
+      });
 
-    //   it("should handle missing options and return empty options and the callback", function () {
-    //     const res = optionsHelp([], gizmo);
-    //     return assert.deepEqual(res, [{}, gizmo]);
-    //   });
+      it("should handle when both options and callback are missing", () => {
+        const res = optionsHelp([], undefined);
+        expect(res).toEqual([{}, undefined]);
+      });
 
-    //   it("should handle when both options and callback are missing", function () {
-    //     const res = optionsHelp([], undefined);
-    //     return assert.deepEqual(res, [{}, undefined]);
-    //   });
+      it("should throw an error when an invalid callback is provided", () => {
+        expect(() => optionsHelp([foo], 5)).toThrow(/options not an object or bad callback/);
+      });
 
-    //   it("should throw an error when an invalid callback is provided", () => assert.throws((() => optionsHelp([foo], 5)), /options not an object or bad callback/));
+      it("should throw an error when a non-array is passed for options", () => {
+        expect(() => optionsHelp(foo, gizmo)).toThrow(/must be an Array with zero or one elements/);
+      });
 
-    //   it("should throw an error when a non-array is passed for options", () => assert.throws((() => optionsHelp(foo, gizmo)), /must be an Array with zero or one elements/));
-
-    //   return it("should throw an error when a bad options array is passed", () => assert.throws((() => optionsHelp([
-    //     foo, 5
-    //   ], gizmo)), /must be an Array with zero or one elements/));
-    // });
+      it("should throw an error when a bad options array is passed", () => {
+        expect(() => optionsHelp([foo, 5], gizmo)).toThrow(/must be an Array with zero or one elements/);
+      });
+    });
 
 
     // describe("splitLongArray", function () {
