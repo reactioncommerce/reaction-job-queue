@@ -11,6 +11,7 @@
     "prebuild": "rimraf dist",
     "build": "cross-env NODE_ENV=production babel ./src --ignore *.spec.js --out-dir ./dist",
     "watch": "watch 'npm run build' src",
+    "lint": "eslint .",
     "test": "jest"
   },
   "repository": {
@@ -42,6 +43,7 @@
     "fibers": "^2.0.0",
     "jest": "^22.3.0",
     "jest-cli": "^22.3.0",
+    "semantic-release": "^12.4.1",
     "watch": "^1.0.2"
   },
   "babel": {
@@ -56,5 +58,8 @@
   },
   "eslintConfig": {
     "extends": "@reactioncommerce"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
