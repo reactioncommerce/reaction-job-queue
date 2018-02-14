@@ -157,7 +157,7 @@ export function createJobCollectionBaseClass({ Meteor, Mongo, check, Match, late
         resubmitted: () => (this._createLogEntry("Job Resubmitted")),
         submitted: () => (this._createLogEntry("Job Submitted")),
         completed: (runId) => (this._createLogEntry("Job Completed", runId, "success")),
-        resolved: (id, runId) => ( this._createLogEntry("Dependency resolved", null, "info", new Date(), { dependency: { id, runId } }) ),
+        resolved: (id, runId) => (this._createLogEntry("Dependency resolved", null, "info", new Date(), { dependency: { id, runId } })),
         failed: (runId, fatal, err) => {
           const { value } = err;
           const msg = `Job Failed with${fatal ? " Fatal" : ""} Error${(typeof value === "string") ? `: ${value}` : ""}.`;
@@ -894,7 +894,7 @@ export function createJobCollectionBaseClass({ Meteor, Mongo, check, Match, late
       const logObj = [];
 
       if (options.force) {
-        mods.$set.depends = [];  // Don"t move to resolved, because they weren"t!
+        mods.$set.depends = []; // Don"t move to resolved, because they weren"t!
         l = this._logMessage.forced();
         if (l) { logObj.push(l); }
       } else {
