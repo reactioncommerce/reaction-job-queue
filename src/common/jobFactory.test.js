@@ -610,254 +610,273 @@ describe("Job", () => {
       checkJob(job2);
     });
   });
+
+  describe("job mutator method", () => {
+    let job = null;
+    let doc = null;
+
+    beforeEach(() => {
+      job = new Job("root", "work", {});
+      doc = job._doc;
+    });
+
+    describe(".depends()", () => {
+      it("should properly update the depends property", () => {
+        const jobA = new Job("root", "work", {});
+        jobA._doc._id = "foo";
+        const jobB = new Job("root", "work", {});
+        jobB._doc._id = "bar";
+        const j = job.depends([jobA, jobB]);
+        expect(j).toBe(job);
+        expect(doc.depends).toEqual(["foo", "bar"]);
+      });
+
+      it("should accept a singlet Job", () => {
+        const jobA = new Job("root", "work", {});
+        jobA._doc._id = "foo";
+        const j = job.depends(jobA);
+        expect(j).toBe(job);
+        expect(doc.depends).toEqual(["foo"]);
+      });
+
+      it("should accept an empty deps array and return the job unchanged", () => {
+        const jobA = new Job("root", "work", {});
+        jobA._doc._id = "foo";
+        let j = job.depends(jobA);
+        expect(j).toBe(job);
+        expect(doc.depends).toEqual(["foo"]);
+        j = job.depends([]);
+        expect(j).toBe(job);
+        expect(doc.depends).toEqual(["foo"]);
+      });
+
+      it("should clear dependencies when passed a falsy value", () => {
+        const jobA = new Job("root", "work", {});
+        jobA._doc._id = "foo";
+        const j = job.depends(jobA);
+        expect(j).toBe(job);
+        expect(doc.depends).toEqual(["foo"]);
+        job.depends(null);
+        expect(doc.depends).toHaveLength(0);
+      });
+
+      it("should throw when given a bad parameter", () => {
+        expect(() => job.depends("badness")).toThrow(/Bad input parameter/);
+      });
+
+      it("should throw when given an array containing non Jobs", () => {
+        expect(() => job.depends(["Badness"])).toThrow(/Each provided object/);
+      });
+
+      it("should throw when given an array containing unsaved Jobs without an _id", () => {
+        const jobA = new Job("root", "work", {});
+        expect(() => job.depends([jobA])).toThrow(/Each provided object/);
+      });
+    });
+
+    describe(".priority()", () => {
+      it("should accept a numeric priority", () => {
+        const j = job.priority(3);
+        expect(j).toBe(job);
+        expect(doc.priority).toBe(3);
+      });
+
+      it("should accept a valid string priority", () => {
+        const j = job.priority("normal");
+        expect(j).toBe(job);
+        expect(doc.priority).toBe(Job.jobPriorities.normal);
+      });
+
+      it("should throw when given an invalid priority level", () => {
+        expect(() => job.priority("super")).toThrow(/Invalid string priority level provided/);
+      });
+
+      it("should throw when given an invalid parameter", () => {
+        expect(() => job.priority([])).toThrow(/priority must be an integer or valid priority level/);
+      });
+
+      it("should throw when given a non-integer", () => {
+        expect(() => job.priority(3.14)).toThrow(/priority must be an integer or valid priority level/);
+      });
+    });
+
+    describe(".retry()", () => {
+      it("should accept a non-negative integer parameter", () => {
+        const j = job.retry(3);
+        expect(j).toBe(job);
+        expect(doc.retries).toBe(3 + 1); // This is correct, it adds one.
+        expect(doc.retryWait).toBe(5 * 60 * 1000);
+        expect(doc.retryBackoff).toBe("constant");
+      });
+
+      it("should accept an option object", () => {
+        const j = job.retry({
+          retries: 3,
+          until: new Date(new Date().valueOf() + 60000),
+          wait: 5000,
+          backoff: "exponential"
+        });
+        expect(j).toBe(job);
+        expect(doc.retries).toBe(3 + 1);
+        expect(doc.retryUntil > new Date()).toBeTruthy();
+        expect(doc.retryWait).toBe(5000);
+        expect(doc.retryBackoff).toBe("exponential");
+      });
+
+      it("should throw when given a bad parameter", () => {
+        expect(() => job.retry("badness")).toThrow(/bad parameter: accepts either an integer/);
+      });
+
+      it("should throw when given a negative integer", () => {
+        expect(() => job.retry(-1)).toThrow(/bad parameter: accepts either an integer/);
+      });
+
+      it("should throw when given a numeric non-integer", () => {
+        expect(() => job.retry(3.14)).toThrow(/bad parameter: accepts either an integer/);
+      });
+
+      it("should throw when given bad options", () => {
+        expect(() => job.retry({ retries: "badness" })).toThrow(/bad option: retries must be an integer/);
+        expect(() => job.retry({ retries: -1 })).toThrow(/bad option: retries must be an integer/);
+        expect(() => job.retry({ retries: 3.14 })).toThrow(/bad option: retries must be an integer/);
+        expect(() => job.retry({ wait: "badness" })).toThrow(/bad option: wait must be an integer/);
+        expect(() => job.retry({ wait: -1 })).toThrow(/bad option: wait must be an integer/);
+        expect(() => job.retry({ wait: 3.14 })).toThrow(/bad option: wait must be an integer/);
+        expect(() => job.retry({ backoff: "bogus" })).toThrow(/bad option: invalid retry backoff method/);
+        expect(() => job.retry({ until: "bogus" })).toThrow(/bad option: until must be a Date object/);
+      });
+    });
+
+    describe(".repeat()", () => {
+      it("should accept a non-negative integer parameter", () => {
+        const j = job.repeat(3);
+        expect(j).toBe(job);
+        expect(doc.repeats).toBe(3);
+      });
+
+      it("should accept an option object", () => {
+        const j = job.repeat({
+          repeats: 3,
+          until: new Date(new Date().valueOf() + 60000),
+          wait: 5000
+        });
+        expect(j).toBe(job);
+        expect(doc.repeats).toBe(3);
+        expect(doc.repeatUntil > new Date()).toBeTruthy();
+        expect(doc.repeatWait).toBe(5000);
+      });
+
+      it("should accept an option object with later.js object", () => {
+        const j = job.repeat({
+          schedule: {
+            schedules: [
+              {
+                h: [10]
+              }
+            ],
+            exceptions: [],
+            other() {
+              return 0;
+            }
+          }
+        });
+        expect(j).toBe(job);
+        expect(doc.repeatWait).toEqual({
+          schedules: [
+            {
+              h: [10]
+            }
+          ],
+          exceptions: []
+        });
+      });
+
+      it("should throw when given a bad parameter", () => {
+        expect(() => job.repeat("badness")).toThrow(/bad parameter: accepts either an integer/);
+      });
+
+      it("should throw when given a negative integer", () => {
+        expect(() => job.repeat(-1)).toThrow(/bad parameter: accepts either an integer/);
+      });
+
+      it("should throw when given a numeric non-integer", () => {
+        expect(() => job.repeat(3.14)).toThrow(/bad parameter: accepts either an integer/);
+      });
+
+      it("should throw when given bad options", () => {
+        expect(() => job.repeat({ repeats: "badness" })).toThrow(/bad option: repeats must be an integer/);
+        expect(() => job.repeat({ repeats: -1 })).toThrow(/bad option: repeats must be an integer/);
+        expect(() => job.repeat({ repeats: 3.14 })).toThrow(/bad option: repeats must be an integer/);
+        expect(() => job.repeat({ wait: "badness" })).toThrow(/bad option: wait must be an integer/);
+        expect(() => job.repeat({ wait: -1 })).toThrow(/bad option: wait must be an integer/);
+        expect(() => job.repeat({ wait: 3.14 })).toThrow(/bad option: wait must be an integer/);
+        expect(() => job.repeat({ until: "bogus" })).toThrow(/bad option: until must be a Date object/);
+        expect(() => job.repeat({ wait: 5, schedule: {} })).toThrow(/bad options: wait and schedule options are mutually exclusive/);
+        expect(() => job.repeat({ schedule: "bogus" })).toThrow(/bad option, schedule option must be an object/);
+        expect(() => job.repeat({ schedule: {} })).toThrow(/bad option, schedule object requires a schedules attribute of type Array/);
+        expect(() => job.repeat({
+          schedule: {
+            schedules: 5
+          }
+        })).toThrow(/bad option, schedule object requires a schedules attribute of type Array/);
+        expect(() => job.repeat({
+          schedule: {
+            schedules: [],
+            exceptions: 5
+          }
+        })).toThrow(/bad option, schedule object exceptions attribute must be an Array/);
+      });
+    });
+
+    describe(".after()", () => {
+      it("should accept a valid Date", () => {
+        const d = new Date();
+        const j = job.after(d);
+        expect(j).toBe(job);
+        expect(doc.after).toBe(d);
+      });
+
+      it("should accept an undefined value", () => {
+        const j = job.after();
+        expect(j).toBe(job);
+        expect(doc.after).toBeInstanceOf(Date);
+        expect(doc.after <= new Date()).toBeTruthy();
+      });
+
+      return it("should throw if given a bad parameter", () => {
+        expect(() => job.after({ foo: "bar" })).toThrow(/Bad parameter, after requires a valid Date object/);
+        expect(() => job.after(123)).toThrow(/Bad parameter, after requires a valid Date object/);
+        expect(() => job.after(false)).toThrow(/Bad parameter, after requires a valid Date object/);
+      });
+    });
+
+    describe(".delay()", () => {
+      it("should accept a valid delay", () => {
+        const j = job.delay(5000);
+        const delay = new Date().valueOf() + 5000;
+        expect(j).toBe(job);
+        expect(doc.after).toBeInstanceOf(Date);
+        expect(doc.after.valueOf()).toBeGreaterThanOrEqual(delay);
+        expect(doc.after.valueOf()).toBeLessThanOrEqual(delay + 1000);
+      });
+
+      it("should accept an undefined parameter", () => {
+        const j = job.delay();
+        const delay = new Date().valueOf();
+        expect(j).toBe(job);
+        expect(doc.after).toBeInstanceOf(Date);
+        expect(doc.after.valueOf()).toBeGreaterThanOrEqual(delay);
+        expect(doc.after.valueOf()).toBeLessThanOrEqual(delay + 1000);
+      });
+
+      return it("should throw when given an invalid parameter", () => {
+        expect(() => job.delay(-1.234)).toThrow(/Bad parameter, delay requires a non-negative integer/);
+        expect(() => job.delay(new Date())).toThrow(/Bad parameter, delay requires a non-negative integer/);
+        expect(() => job.delay(false)).toThrow(/Bad parameter, delay requires a non-negative integer/);
+      });
+    });
+  });
 });
-
-//   describe("job mutator method", function () {
-
-//     let job = null;
-//     let doc = null;
-
-//     beforeEach(function () {
-//       job = Job("root", "work", {});
-//       return doc = job._doc;
-//     });
-
-//     describe(".depends()", function () {
-
-//       it("should properly update the depends property", function () {
-//         const jobA = Job("root", "work", {});
-//         jobA._doc._id = "foo";
-//         const jobB = Job("root", "work", {});
-//         jobB._doc._id = "bar";
-//         const j = job.depends([jobA, jobB]);
-//         assert.equal(j, job);
-//         return assert.deepEqual(doc.depends, ["foo", "bar"]);
-//       });
-
-//       it("should accept a singlet Job", function () {
-//         const jobA = Job("root", "work", {});
-//         jobA._doc._id = "foo";
-//         const j = job.depends(jobA);
-//         assert.equal(j, job);
-//         return assert.deepEqual(doc.depends, ["foo"]);
-//       });
-
-//       it("should accept an empty deps array and return the job unchanged", function () {
-//         const jobA = Job("root", "work", {});
-//         jobA._doc._id = "foo";
-//         let j = job.depends(jobA);
-//         assert.equal(j, job);
-//         assert.deepEqual(doc.depends, ["foo"]);
-//         j = job.depends([]);
-//         assert.equal(j, job);
-//         return assert.deepEqual(doc.depends, ["foo"]);
-//       });
-
-//       it("should clear dependencies when passed a falsy value", function () {
-//         const jobA = Job("root", "work", {});
-//         jobA._doc._id = "foo";
-//         const j = job.depends(jobA);
-//         assert.equal(j, job);
-//         assert.deepEqual(doc.depends, ["foo"]);
-//         job.depends(null);
-//         return assert.lengthOf(doc.depends, 0);
-//       });
-
-//       it("should throw when given a bad parameter", () => assert.throw((() => job.depends("badness")), /Bad input parameter/));
-
-//       it("should throw when given an array containing non Jobs", () => assert.throw((() => job.depends(["Badness"])), /Each provided object/));
-
-//       return it("should throw when given an array containing unsaved Jobs without an _id", function () {
-//         const jobA = Job("root", "work", {});
-//         return assert.throw((() => job.depends([jobA])), /Each provided object/);
-//       });
-//     });
-
-//     describe(".priority()", function () {
-
-//       it("should accept a numeric priority", function () {
-//         const j = job.priority(3);
-//         assert.equal(j, job);
-//         return assert.equal(doc.priority, 3);
-//       });
-
-//       it("should accept a valid string priority", function () {
-//         const j = job.priority("normal");
-//         assert.equal(j, job);
-//         return assert.equal(doc.priority, Job.jobPriorities["normal"]);
-//       });
-
-//       it("should throw when given an invalid priority level", () => assert.throw((() => job.priority("super")), /Invalid string priority level provided/));
-
-//       it("should throw when given an invalid parameter", () => assert.throw((() => job.priority([])), /priority must be an integer or valid priority level/));
-
-//       return it("should throw when given a non-integer", () => assert.throw((() => job.priority(3.14)), /priority must be an integer or valid priority level/));
-//     });
-
-//     describe(".retry()", function () {
-
-//       it("should accept a non-negative integer parameter", function () {
-//         const j = job.retry(3);
-//         assert.equal(j, job);
-//         assert.equal(doc.retries, 3 + 1); // This is correct, it adds one.
-//         assert.equal(doc.retryWait, 5 * 60 * 1000);
-//         return assert.equal(doc.retryBackoff, "constant");
-//       });
-
-//       it("should accept an option object", function () {
-//         const j = job.retry({
-//           retries: 3,
-//           until: new Date(new Date().valueOf() + 60000),
-//           wait: 5000,
-//           backoff: "exponential"
-//         });
-//         assert.equal(j, job);
-//         assert.equal(doc.retries, 3 + 1);
-//         assert.ok(doc.retryUntil > new Date());
-//         assert.equal(doc.retryWait, 5000);
-//         return assert.equal(doc.retryBackoff, "exponential");
-//       });
-
-//       it("should throw when given a bad parameter", () => assert.throw((() => job.retry("badness")), /bad parameter: accepts either an integer/));
-
-//       it("should throw when given a negative integer", () => assert.throw((() => job.retry(-1)), /bad parameter: accepts either an integer/));
-
-//       it("should throw when given a numeric non-integer", () => assert.throw((() => job.retry(3.14)), /bad parameter: accepts either an integer/));
-
-//       return it("should throw when given bad options", function () {
-//         assert.throw((() => job.retry({ retries: "badness" })), /bad option: retries must be an integer/);
-//         assert.throw((() => job.retry({ retries: -1 })), /bad option: retries must be an integer/);
-//         assert.throw((() => job.retry({ retries: 3.14 })), /bad option: retries must be an integer/);
-//         assert.throw((() => job.retry({ wait: "badness" })), /bad option: wait must be an integer/);
-//         assert.throw((() => job.retry({ wait: -1 })), /bad option: wait must be an integer/);
-//         assert.throw((() => job.retry({ wait: 3.14 })), /bad option: wait must be an integer/);
-//         assert.throw((() => job.retry({ backoff: "bogus" })), /bad option: invalid retry backoff method/);
-//         return assert.throw((() => job.retry({ until: "bogus" })), /bad option: until must be a Date object/);
-//       });
-//     });
-
-//     describe(".repeat()", function () {
-
-//       it("should accept a non-negative integer parameter", function () {
-//         const j = job.repeat(3);
-//         assert.equal(j, job);
-//         return assert.equal(doc.repeats, 3);
-//       });
-
-//       it("should accept an option object", function () {
-//         const j = job.repeat({
-//           repeats: 3,
-//           until: new Date(new Date().valueOf() + 60000),
-//           wait: 5000
-//         });
-//         assert.equal(j, job);
-//         assert.equal(doc.repeats, 3);
-//         assert.ok(doc.repeatUntil > new Date());
-//         return assert.equal(doc.repeatWait, 5000);
-//       });
-
-//       it("should accept an option object with later.js object", function () {
-//         const j = job.repeat({
-//           schedule: {
-//             schedules: [
-//               {
-//                 h: [10]
-//               }
-//             ],
-//             exceptions: [],
-//             other() {
-//               return 0;
-//             }
-//           }
-//         });
-//         assert.equal(j, job);
-//         return assert.deepEqual(doc.repeatWait, {
-//           schedules: [
-//             {
-//               h: [10]
-//             }
-//           ],
-//           exceptions: []
-//         });
-//       });
-
-//       it("should throw when given a bad parameter", () => assert.throw((() => job.repeat("badness")), /bad parameter: accepts either an integer/));
-
-//       it("should throw when given a negative integer", () => assert.throw((() => job.repeat(-1)), /bad parameter: accepts either an integer/));
-
-//       it("should throw when given a numeric non-integer", () => assert.throw((() => job.repeat(3.14)), /bad parameter: accepts either an integer/));
-
-//       return it("should throw when given bad options", function () {
-//         assert.throw((() => job.repeat({ repeats: "badness" })), /bad option: repeats must be an integer/);
-//         assert.throw((() => job.repeat({ repeats: -1 })), /bad option: repeats must be an integer/);
-//         assert.throw((() => job.repeat({ repeats: 3.14 })), /bad option: repeats must be an integer/);
-//         assert.throw((() => job.repeat({ wait: "badness" })), /bad option: wait must be an integer/);
-//         assert.throw((() => job.repeat({ wait: -1 })), /bad option: wait must be an integer/);
-//         assert.throw((() => job.repeat({ wait: 3.14 })), /bad option: wait must be an integer/);
-//         assert.throw((() => job.repeat({ until: "bogus" })), /bad option: until must be a Date object/);
-//         assert.throw((() => job.repeat({ wait: 5, schedule: {} })), /bad options: wait and schedule options are mutually exclusive/);
-//         assert.throw((() => job.repeat({ schedule: "bogus" })), /bad option, schedule option must be an object/);
-//         assert.throw((() => job.repeat({ schedule: {} })), /bad option, schedule object requires a schedules attribute of type Array/);
-//         assert.throw((() => job.repeat({
-//           schedule: {
-//             schedules: 5
-//           }
-//         })), /bad option, schedule object requires a schedules attribute of type Array/);
-//         return assert.throw((() => job.repeat({
-//           schedule: {
-//             schedules: [],
-//             exceptions: 5
-//           }
-//         })), /bad option, schedule object exceptions attribute must be an Array/);
-//       });
-//     });
-
-//     describe(".after()", function () {
-
-//       it("should accept a valid Date", function () {
-//         const d = new Date();
-//         const j = job.after(d);
-//         assert.equal(j, job);
-//         return assert.equal(doc.after, d);
-//       });
-
-//       it("should accept an undefined value", function () {
-//         const j = job.after();
-//         assert.equal(j, job);
-//         assert.instanceOf(doc.after, Date);
-//         return assert(doc.after <= new Date());
-//       });
-
-//       return it("should throw if given a bad parameter", function () {
-//         assert.throw((() => job.after({ foo: "bar" })), /Bad parameter, after requires a valid Date object/);
-//         assert.throw((() => job.after(123)), /Bad parameter, after requires a valid Date object/);
-//         return assert.throw((() => job.after(false)), /Bad parameter, after requires a valid Date object/);
-//       });
-//     });
-
-//     return describe(".delay()", function () {
-
-//       it("should accept a valid delay", function () {
-//         const j = job.delay(5000);
-//         assert.equal(j, job);
-//         assert.instanceOf(doc.after, Date);
-//         return assert.closeTo(doc.after.valueOf(), new Date().valueOf() + 5000, 1000);
-//       });
-
-//       it("should accept an undefined parameter", function () {
-//         const j = job.delay();
-//         assert.equal(j, job);
-//         assert.instanceOf(doc.after, Date);
-//         return assert.closeTo(doc.after.valueOf(), new Date().valueOf(), 1000);
-//       });
-
-//       return it("should throw when given an invalid parameter", function () {
-//         assert.throw((() => job.delay(-1.234)), /Bad parameter, delay requires a non-negative integer/);
-//         assert.throw((() => job.delay(new Date())), /Bad parameter, delay requires a non-negative integer/);
-//         return assert.throw((() => job.delay(false)), /Bad parameter, delay requires a non-negative integer/);
-//       });
-//     });
-//   });
 
 //   return describe("communicating", function () {
 
