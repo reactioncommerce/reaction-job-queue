@@ -524,29 +524,29 @@ describe("Job", () => {
       ));
     });
 
-    // return describe("_setInterval", function () {
+    return describe("_setInterval", () => {
+      const { _setInterval, _clearInterval } = JobPrivate;
 
-    //   const _setInterval = Job.__get__("_setInterval");
-    //   const _clearInterval = Job.__get__("_clearInterval");
+      it("should invoke the provided callback repeatedly with args", () => (
+        new Promise((resolve) => {
+          let cancel = null;
+          let count = 0;
+          const cb = (a, b) => {
+            expect(a).toBe("foo");
+            expect(b).toBe("bar");
+            count += 1;
+            if (count === 2) {
+              _clearInterval(cancel);
+              resolve();
+            } else if (count > 2) {
+              throw new Error("Interval called too many times");
+            }
+          };
 
-    //   return it("should invoke the provided callback repeatedly with args", function (done) {
-    //     let cancel = null;
-    //     let count = 0;
-    //     const cb = function (a, b) {
-    //       assert.equal(a, "foo");
-    //       assert.equal(b, "bar");
-    //       count++;
-    //       if (count === 2) {
-    //         _clearInterval(cancel);
-    //         return done();
-    //       } else if (count > 2) {
-    //         throw "Interval called too many times";
-    //       }
-    //     };
-
-    //     return cancel = _setInterval(cb, 10, "foo", "bar");
-    //   });
-    // });
+          cancel = _setInterval(cb, 10, "foo", "bar");
+        })
+      ));
+    });
   });
 });
 
