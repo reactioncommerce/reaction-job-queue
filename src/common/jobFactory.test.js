@@ -57,6 +57,18 @@ class DDP {
 //   }
 }
 
+// const makeDdpStub = action => function (name, params, cb) {
+//   const [err,
+//     res] = Array.from(action(name, params));
+//   // console.dir res
+//   if (cb != null) {
+//     return process.nextTick(() => cb(err, res));
+//   } else if (err) {
+//     throw err;
+//   }
+//   return res;
+// };
+
 describe("Job", () => {
   it("has class constants", () => {
     expect(typeof Job.forever).toBe("number");
@@ -536,240 +548,6 @@ describe("Job", () => {
     // });
   });
 });
-
-
-
-
-// /*
-//  * decaffeinate suggestions:
-//  * DS101: Remove unnecessary use of Array.from
-//  * DS102: Remove unnecessary code created because of implicit returns
-//  * DS205: Consider reworking code to avoid use of IIFEs
-//  * DS207: Consider shorter variations of null checks
-//  * Full docs: https://github.com/decaffeinate/decaffeinate/blob/master/docs/suggestions.md
-//  */
-// // ###########################################################################     Copyright (C) 2014-2017 by Vaughn
-// // Iverson     meteor-job-class is free software released under the MIT/X11 license.     See included LICENSE file for
-// // details. ########################################################################### Unit tests
-
-// import { sinon } from "meteor/practicalmeteor:sinon";
-// import { assert } from "meteor/practicalmeteor:chai";
-// const path = require('path');
-// const rewire = require("rewire");
-// const Fiber = require("fibers");
-// const Job = require("/Users/mikemurray/Projects/reaction/reaction/imports/plugins/core/job-collection/lib/job.js");
-
-// // Mock DDP class
-// class DDP {
-//   call(name, params, cb = null) {
-//     if ((cb == null) || (typeof cb !== "function")) {
-//       switch (name) {
-//         case "root_true":
-//           return true;
-//           break;
-//         case "root_false":
-//           return false;
-//           break;
-//         case "root_param":
-//           return params[0];
-//           break;
-//         case "root_error":
-//           throw new Error("Method failed");
-//           break;
-//         default:
-//           throw new Error("Bad method in call");
-//       }
-//     } else {
-//       switch (name) {
-//         case "root_true":
-//           process.nextTick(() => cb(null, true));
-//           break;
-//         case "root_false":
-//           process.nextTick(() => cb(null, false));
-//           break;
-//         case "root_param":
-//           process.nextTick(() => cb(null, params[0]));
-//           break;
-//         case "root_error":
-//           process.nextTick(() => cb(new Error("Method failed")));
-//           break;
-//         default:
-//           process.nextTick(() => cb(new Error("Bad method in call")));
-//       }
-//     }
-//   }
-
-//   connect() {
-//     return process.nextTick(() => cb(null));
-//   }
-
-//   close() {
-//     return process.nextTick(() => cb(null));
-//   }
-
-//   subscribe() {
-//     return process.nextTick(() => cb(null));
-//   }
-
-//   observe() {
-//     return process.nextTick(() => cb(null));
-//   }
-// }
-
-// const makeDdpStub = action => function (name, params, cb) {
-//   const [err,
-//     res] = Array.from(action(name, params));
-//   // console.dir res
-//   if (cb != null) {
-//     return process.nextTick(() => cb(err, res));
-//   } else if (err) {
-//     throw err;
-//   }
-//   return res;
-// };
-
-// //##########################################
-
-// describe("Job", function () {
-
-//   it("has class constants", function () {
-//     assert.isNumber(Job.forever);
-//     assert.isObject(Job.jobPriorities);
-//     assert.lengthOf(Object.keys(Job.jobPriorities), 5);
-//     assert.isArray(Job.jobRetryBackoffMethods);
-//     assert.lengthOf(Job.jobRetryBackoffMethods, 2);
-//     assert.isArray(Job.jobStatuses);
-//     assert.lengthOf(Job.jobStatuses, 7);
-//     assert.isArray(Job.jobLogLevels);
-//     assert.lengthOf(Job.jobLogLevels, 4);
-//     assert.isArray(Job.jobStatusCancellable);
-//     assert.lengthOf(Job.jobStatusCancellable, 4);
-//     assert.isArray(Job.jobStatusPausable);
-//     assert.lengthOf(Job.jobStatusPausable, 2);
-//     assert.isArray(Job.jobStatusRemovable);
-//     assert.lengthOf(Job.jobStatusRemovable, 3);
-//     assert.isArray(Job.jobStatusRestartable);
-//     assert.lengthOf(Job.jobStatusRestartable, 2);
-//     assert.isArray(Job.ddpPermissionLevels);
-//     assert.lengthOf(Job.ddpPermissionLevels, 4);
-//     assert.isArray(Job.ddpMethods);
-//     assert.lengthOf(Job.ddpMethods, 18);
-//     assert.isObject(Job.ddpMethodPermissions);
-//     return assert.lengthOf(Object.keys(Job.ddpMethodPermissions), Job.ddpMethods.length);
-//   });
-
-//   it("has a _ddp_apply class variable that defaults as undefined outside of Meteor", () => assert.isUndefined(Job._ddp_apply));
-
-//   it("has a processJobs method that is the JobQueue constructor", () => assert.equal(Job.processJobs, Job.__get__("JobQueue")));
-
-//   describe("setDDP", function () {
-
-//     const ddp = new DDP();
-
-//     describe("default setup", function () {
-
-//       it("throws if given a non-ddp object", () => assert.throws((() => Job.setDDP({})), /Bad ddp object/));
-
-//       it("properly sets the default _ddp_apply class variable", function (done) {
-//         sinon.stub(ddp, "call").yieldsAsync();
-//         Job.setDDP(ddp);
-//         return Job._ddp_apply("test", [], function () {
-//           assert(ddp.call.calledOnce);
-//           ddp.call.restore();
-//           return done();
-//         });
-//       });
-
-//       it("fails if subsequently called with a collection name", function (done) {
-//         assert.throws((() => Job.setDDP(ddp, "test1")), /Job.setDDP must specify/);
-//         return done();
-//       });
-
-//       return after(() => Job._ddp_apply = undefined);
-//     });
-
-//     return describe("setup with collection name", function () {
-
-//       it("properly sets the _ddp_apply class variable", function (done) {
-//         sinon.stub(ddp, "call").yieldsAsync();
-//         Job.setDDP(ddp, "test1");
-//         return Job._ddp_apply.test1("test", [], function () {
-//           assert(ddp.call.calledOnce);
-//           ddp.call.restore();
-//           return done();
-//         });
-//       });
-
-//       it("properly sets the _ddp_apply class variable when called with array", function (done) {
-//         sinon.stub(ddp, "call").yieldsAsync();
-//         Job.setDDP(ddp, ["test2", "test3"]);
-//         return Job._ddp_apply.test2("test", [], () => Job._ddp_apply.test3("test", [], function () {
-//           assert.equal(ddp.call.callCount, 2);
-//           ddp.call.restore();
-//           return done();
-//         }));
-//       });
-
-//       it("fails if subsequently called without a collection name", function (done) {
-//         assert.throws((() => Job.setDDP(ddp)), /Job.setDDP must specify/);
-//         return done();
-//       });
-
-//       return after(() => Job._ddp_apply = undefined);
-//     });
-//   });
-
-//   describe("Fiber support", function () {
-
-//     const ddp = new DDP();
-
-//     it("accepts a valid collection name and Fiber object and properly yields and runs", function (done) {
-//       sinon.stub(ddp, "call").yieldsAsync();
-//       Job.setDDP(ddp, "test1", Fiber);
-//       const fib = Fiber(() => Job._ddp_apply.test1("test", []));
-//       fib.run();
-//       assert(ddp.call.calledOnce);
-//       ddp.call.restore();
-//       return done();
-//     });
-
-//     it("accepts a default collection name and valid Fiber object and properly yields and runs", function (done) {
-//       sinon.stub(ddp, "call").yieldsAsync();
-//       Job.setDDP(ddp, Fiber);
-//       const fib = Fiber(() => Job._ddp_apply("test", []));
-//       fib.run();
-//       assert(ddp.call.calledOnce);
-//       ddp.call.restore();
-//       return done();
-//     });
-
-//     it("properly returns values from method calls", function (done) {
-//       Job.setDDP(ddp, Fiber);
-//       const fib = Fiber(function () {
-//         assert.isTrue(Job._ddp_apply("root_true", []));
-//         assert.isFalse(Job._ddp_apply("root_false", []));
-//         assert.deepEqual(Job._ddp_apply("root_param", [
-//           ["a", 1, null]
-//         ]), ["a", 1, null]);
-//         return done();
-//       });
-//       return fib.run();
-//     });
-
-//     it("properly propagates thrown errors within a Fiber", function (done) {
-//       Job.setDDP(ddp, Fiber);
-//       const fib = Fiber(function () {
-//         assert.throws((() => Job._ddp_apply("root_error", [])), /Method failed/);
-//         assert.throws((() => Job._ddp_apply("bad_method", [])), /Bad method in call/);
-//         return done();
-//       });
-//       return fib.run();
-//     });
-
-//     return afterEach(() => Job._ddp_apply = undefined);
-//   });
-
-
 
 
 //   describe("Job constructor", function () {
