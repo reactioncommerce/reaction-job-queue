@@ -512,7 +512,7 @@ describe("Job", () => {
     describe("_setImmediate", () => {
       const { _setImmediate } = JobPrivate;
 
-      it("should invoke the provided callback with args", (done) => (
+      it("should invoke the provided callback with args", () => (
         new Promise((resolve) => {
           const cb = (a, b) => {
             expect(a).toBe("foo");
