@@ -576,7 +576,7 @@ export function createJobClass({ Meteor, isTest }) {
       }
       return (() => {
         const result = [];
-        for (const collName of Array.from(collectionNames)) {
+        for (const collName of collectionNames) {
           if (ddp && ddp.call && !Fiber) {
             result.push(this._setDDPApply(ddp.call.bind(ddp), collName));
           } else if (ddp && ddp.call) {
