@@ -579,7 +579,7 @@ export function createJobClass({ Meteor, isTest }) {
         for (const collName of collectionNames) {
           if (ddp && ddp.call && !Fiber) {
             result.push(this._setDDPApply(ddp.call.bind(ddp), collName));
-          } else if (ddp && ddp.call) {
+          } else if (ddp && ddp.call && Fiber) {
             // If Fibers in use under pure node.js,
             // make sure to yield and throw errors when no callback
             result.push(this._setDDPApply((name, params, cb) => {
@@ -587,9 +587,7 @@ export function createJobClass({ Meteor, isTest }) {
               ddp.call(name, params, (err, res) => {
                 if (typeof cb === "function") {
                   return cb(err, res);
-                }
-
-                if (err) {
+                } else if (err) {
                   return fib.throwInto(err);
                 }
 
