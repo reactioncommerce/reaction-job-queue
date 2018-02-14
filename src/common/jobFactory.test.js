@@ -377,71 +377,50 @@ describe("Job", () => {
     });
 
 
-    // describe("splitLongArray", function () {
+    describe("splitLongArray", () => {
+      const { splitLongArray } = JobPrivate;
+      const longArray = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
 
-    //   const splitLongArray = Job.__get__("splitLongArray");
+      it("should properly split an array", () => {
+        const res = splitLongArray(longArray, 4);
+        expect(res).toEqual([
+          [0, 1, 2, 3],
+          [4, 5, 6, 7],
+          [8, 9, 10, 11]
+        ]);
+      });
 
-    //   const longArray = [
-    //     0,
-    //     1,
-    //     2,
-    //     3,
-    //     4,
-    //     5,
-    //     6,
-    //     7,
-    //     8,
-    //     9,
-    //     10,
-    //     11
-    //   ];
+      it("should handle remainders correctly", () => {
+        const res = splitLongArray(longArray, 5);
+        expect(res).toEqual([
+          [0, 1, 2, 3, 4],
+          [5, 6, 7, 8, 9],
+          [10, 11]
+        ]);
+      });
 
-    //   it("should properly split an array", function () {
-    //     const res = splitLongArray(longArray, 4);
-    //     return assert.deepEqual(res, [
-    //       [
-    //         0, 1, 2, 3
-    //       ],
-    //       [
-    //         4, 5, 6, 7
-    //       ],
-    //       [8, 9, 10, 11]
-    //     ]);
-    //   });
+      it("should handle an empty array", () => {
+        const res = splitLongArray([], 5);
+        expect(res).toEqual([]);
+      });
 
-    //   it("should handle remainders correctly", function () {
-    //     const res = splitLongArray(longArray, 5);
-    //     return assert.deepEqual(res, [
-    //       [
-    //         0, 1, 2, 3, 4
-    //       ],
-    //       [
-    //         5, 6, 7, 8, 9
-    //       ],
-    //       [10, 11]
-    //     ]);
-    //   });
+      it("should handle a single element array", () => {
+        const res = splitLongArray([0], 5);
+        expect(res).toEqual([[0]]);
+      });
 
-    //   it("should handle an empty array", function () {
-    //     const res = splitLongArray([], 5);
-    //     return assert.deepEqual(res, []);
-    //   });
+      it("should throw if not given an array", () => {
+        expect(() => splitLongArray({ foo: "bar" }, 5)).toThrow(/splitLongArray: bad params/);
+      });
 
-    //   it("should handle a single element array", function () {
-    //     const res = splitLongArray([0], 5);
-    //     return assert.deepEqual(res, [
-    //       [0]
-    //     ]);
-    //   });
+      it("should throw if given an out of range max value", () => {
+        expect(() => splitLongArray(longArray, 0)).toThrow(/splitLongArray: bad params/);
+      });
 
-    //   it("should throw if not given an array", () => assert.throws((() => splitLongArray({
-    //     foo: "bar"
-    //   }, 5)), /splitLongArray: bad params/));
-
-    //   it("should throw if given an out of range max value", () => assert.throws((() => splitLongArray(longArray, 0)), /splitLongArray: bad params/));
-
-    //   return it("should throw if given an invalid max value", () => assert.throws((() => splitLongArray(longArray, "cow")), /splitLongArray: bad params/));
-    // });
+      it("should throw if given an invalid max value", () => {
+        expect(() => splitLongArray(longArray, "cow")).toThrow(/splitLongArray: bad params/);
+      });
+    });
 
     // describe("concatReduce", function () {
     //   const concatReduce = Job.__get__("concatReduce");
