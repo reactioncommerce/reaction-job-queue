@@ -4,7 +4,7 @@
   License: https://github.com/vsivsi/meteor-job-collection/blob/master/LICENSE
  */
 
-export function createJobClass({ Meteor }) {
+export function createJobClass({ Meteor, isTest }) {
   function methodCall(root, method, params, cb, after = (ret) => ret) {
     // Disable no-use-before-define because while it looks like we're accessing `Job` before it's defined,
     // it's actually being accessed after it's defined, because this method is called from within a Job class instance.
@@ -1379,6 +1379,10 @@ export function createJobClass({ Meteor }) {
       range.push(i);
     }
     return range;
+  }
+
+  if (isTest) {
+    return { Job, JobQueue, methodCall, optionsHelp, splitLongArray };
   }
 
   return Job;
