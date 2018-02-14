@@ -555,7 +555,7 @@ describe("Job", () => {
       expect(job.data).toEqual({ foo: "bar" });
       expect(typeof job._doc).toBe("object");
       const doc = job._doc;
-      // expect(doc).notProperty("_id");
+      expect(doc).not.toHaveProperty("_id");
       expect(doc.runId).toBeNull();
       expect(job.type).toBe(doc.type);
       expect(job.data).toEqual(doc.data);
@@ -584,37 +584,33 @@ describe("Job", () => {
       checkJob(job);
     });
 
-    // it("should work without 'new'", () => {
-    //   const job = Job("root", "work", { foo: "bar" });
-    //   checkJob(job);
-    // });
+    it("should not work without 'new'", () => {
+      expect(() => Job("root", "work", { foo: "bar" })).toThrow(/Cannot call a class as a function/);
+    });
 
-    // it("should throw when given bad parameters", () => {
-    //   expect(Job).toThrow(/new Job: bad parameter/);
-    // });
+    it("should throw when given bad parameters", () => {
+      expect(() => new Job()).toThrow(/new Job: bad parameter/);
+    });
 
-    // it("should support using a valid job document", function () {
-    //   const job = new Job("root", "work", { foo: "bar" });
-    //   checkJob(job);
-    //   const job2 = new Job("root", job.doc);
-    //   return checkJob(job2);
-    // });
+    it("should support using a valid job document", () => {
+      const job = new Job("root", "work", { foo: "bar" });
+      checkJob(job);
+      const job2 = new Job("root", job.doc);
+      checkJob(job2);
+    });
 
-    // return it("should support using a valid oobject for root", function () {
-    //   const job = new Job({
-    //     root: "root"
-    //   }, "work", { foo: "bar" });
-    //   checkJob(job);
-    //   const job2 = new Job({
-    //     root: "root"
-    //   }, job.doc);
-    //   return checkJob(job2);
-    // });
+    return it("should support using a valid oobject for root", () => {
+      const job = new Job({
+        root: "root"
+      }, "work", { foo: "bar" });
+      checkJob(job);
+      const job2 = new Job({
+        root: "root"
+      }, job.doc);
+      checkJob(job2);
+    });
   });
 });
-
-
-
 
 //   describe("job mutator method", function () {
 
