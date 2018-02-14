@@ -434,58 +434,68 @@ describe("Job", () => {
       });
     });
 
-    // describe("reduceCallbacks", function () {
-    //   const reduceCallbacks = Job.__get__("reduceCallbacks");
+    describe("reduceCallbacks", () => {
+      const { reduceCallbacks } = JobPrivate;
 
-    //   it("should return undefined if given a falsy callback", () => assert.isUndefined(reduceCallbacks(undefined, 5)));
+      it("should return undefined if given a falsy callback", () => {
+        expect(reduceCallbacks(undefined, 5)).toBeUndefined();
+      });
 
-    //   it("should properly absorb the specified number of callbacks", function () {
-    //     const spy = sinon.spy();
-    //     const cb = reduceCallbacks(spy, 3);
-    //     cb(null, true);
-    //     cb(null, false);
-    //     cb(null, true);
-    //     assert(spy.calledOnce);
-    //     return assert(spy.calledWith(null, true));
-    //   });
+      it("should properly absorb the specified number of callbacks", () => {
+        const spy = jest.fn();
+        const cb = reduceCallbacks(spy, 3);
+        cb(null, true);
+        cb(null, false);
+        cb(null, true);
+        expect(spy).toHaveBeenCalledTimes(1);
+        expect(spy).toHaveBeenCalledWith(null, true);
+      });
 
-    //   it("should properly reduce the callback results", function () {
-    //     const spy = sinon.spy();
-    //     const cb = reduceCallbacks(spy, 3);
-    //     cb(null, false);
-    //     cb(null, false);
-    //     cb(null, false);
-    //     assert(spy.calledOnce);
-    //     return assert(spy.calledWith(null, false));
-    //   });
+      it("should properly reduce the callback results", () => {
+        const spy = jest.fn();
+        const cb = reduceCallbacks(spy, 3);
+        cb(null, false);
+        cb(null, false);
+        cb(null, false);
+        expect(spy).toHaveBeenCalledTimes(1);
+        expect(spy).toHaveBeenCalledWith(null, false);
+      });
 
-    //   it("should properly reduce with a custom reduce function", function () {
-    //     const concatReduce = Job.__get__("concatReduce");
-    //     const spy = sinon.spy();
-    //     const cb = reduceCallbacks(spy, 3, concatReduce, []);
-    //     cb(null, false);
-    //     cb(null, true);
-    //     cb(null, false);
-    //     assert(spy.calledOnce, "callback called too many times");
-    //     return assert(spy.calledWith(null, [false, true, false]), "Returned wrong result");
-    //   });
+      it("should properly reduce with a custom reduce function", () => {
+        const { concatReduce } = JobPrivate;
+        const spy = jest.fn();
+        const cb = reduceCallbacks(spy, 3, concatReduce, []);
+        cb(null, false);
+        cb(null, true);
+        cb(null, false);
+        expect(spy).toHaveBeenCalledTimes(1);
+        expect(spy).toHaveBeenCalledWith(null, [false, true, false]);
+      });
 
-    //   it("should throw if called too many times", function () {
-    //     const spy = sinon.spy();
-    //     const cb = reduceCallbacks(spy, 2);
-    //     cb(null, true);
-    //     cb(null, true);
-    //     return assert.throws(cb, /reduceCallbacks callback invoked more than requested/);
-    //   });
+      it("should throw if called too many times", () => {
+        const spy = jest.fn();
+        const cb = reduceCallbacks(spy, 2);
+        cb(null, true);
+        cb(null, true);
+        expect(cb).toThrow(/reduceCallbacks callback invoked more than requested/);
+      });
 
-    //   it("should throw if given a non-function callback", () => assert.throws((() => reduceCallbacks(5)), /Bad params given to reduceCallbacks/));
+      it("should throw if given a non-function callback", () => {
+        expect(() => reduceCallbacks(5)).toThrow(/Bad params given to reduceCallbacks/);
+      });
 
-    //   it("should throw if given an invalid number of callbacks to absorb", () => assert.throws((() => reduceCallbacks((function () { }), "cow")), /Bad params given to reduceCallbacks/));
+      it("should throw if given an invalid number of callbacks to absorb", () => {
+        expect(() => reduceCallbacks(() => {}, "cow")).toThrow(/Bad params given to reduceCallbacks/);
+      });
 
-    //   it("should throw if given an out of range number of callbacks to absorb", () => assert.throws((() => reduceCallbacks((function () { }), 0)), /Bad params given to reduceCallbacks/));
+      it("should throw if given an out of range number of callbacks to absorb", () => {
+        expect(() => reduceCallbacks(() => {}, 0)).toThrow(/Bad params given to reduceCallbacks/);
+      });
 
-    //   return it("should throw if given a non-function reduce", () => assert.throws((() => reduceCallbacks((function () { }), 5, 5)), /Bad params given to reduceCallbacks/));
-    // });
+      it("should throw if given a non-function reduce", () => {
+        expect(() => reduceCallbacks(() => { }, 5, 5)).toThrow(/Bad params given to reduceCallbacks/);
+      });
+    });
 
     // describe("_setImmediate", function () {
 
