@@ -291,9 +291,9 @@ export function createJobCollectionClass({ Meteor, Job, JobCollectionBaseClass }
       this.find({
         status: "running",
         expiresAfter: { $lt: new Date() }
-      }).forEach((job) => {
-        return new Job(this.root, job).fail("Failed for exceeding worker set workTimeout");
-      });
+      }).forEach((job) => (
+        new Job(this.root, job).fail("Failed for exceeding worker set workTimeout")
+      ));
       // Change jobs from waiting to ready when their time has come
       // and dependencies have been satisfied
       return this.readyJobs();
