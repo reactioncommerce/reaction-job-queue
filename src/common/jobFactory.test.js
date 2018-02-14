@@ -1,13 +1,11 @@
-import { resolve } from "url";
-
-const Fiber = require("fibers");
+// const Fiber = require("fibers");
 const { createJobClass } = require("./jobFactory");
 
 const { Job, ...JobPrivate } = createJobClass({ isTest: true });
 
 class DDP {
   call(name, params, cb = null) {
-    if (cb === null || typeof cb !== "function") {  
+    if (cb === null || typeof cb !== "function") {
       switch (name) {
         case "root_true":
           return true;
@@ -112,8 +110,8 @@ describe("Job", () => {
         expect(() => Job.setDDP({})).toThrow(/Bad ddp object/);
       });
 
-      it("properly sets the default _ddp_apply class variable", () => {
-        return new Promise((resolve) => {
+      it("properly sets the default _ddp_apply class variable", () => (
+        new Promise((resolve) => {
           const spy = jest.spyOn(ddp, "call");
           Job.setDDP(ddp);
 
@@ -122,8 +120,8 @@ describe("Job", () => {
             spy.mockClear();
             resolve();
           });
-        });
-      });
+        })
+      ));
 
       it("fails if subsequently called with a collection name", () => {
         expect(() => Job.setDDP(ddp, "test1")).toThrow(/Job.setDDP must specify/);
@@ -135,8 +133,8 @@ describe("Job", () => {
     });
 
     describe("setup with collection name", () => {
-      it("properly sets the default _ddp_apply class variable", () => {
-        return new Promise((resolve) => {
+      it("properly sets the default _ddp_apply class variable", () => (
+        new Promise((resolve) => {
           const spy = jest.spyOn(ddp, "call");
           Job.setDDP(ddp, "test1");
 
@@ -145,8 +143,8 @@ describe("Job", () => {
             spy.mockClear();
             resolve();
           });
-        });
-      });
+        })
+      ));
 
 
       it("properly sets the _ddp_apply class variable when called with array", () => (
