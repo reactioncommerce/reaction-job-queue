@@ -96,10 +96,6 @@ describe("Job", () => {
     expect(Job._ddp_apply).toBeUndefined();
   });
 
-  // it("has a processJobs method that is the JobQueue constructor", () => {
-  //   expect(Job.processJobs).toEqual(Job.JobQueue);
-  // });
-
   describe("setDDP", () => {
     const ddp = new DDP();
 
