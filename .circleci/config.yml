@@ -29,6 +29,8 @@ jobs:
 
       - run: npm test
 
+      - run: npm run build
+
       - save_cache:
           paths:
             - node_modules
