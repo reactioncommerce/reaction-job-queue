@@ -863,7 +863,7 @@ describe("Job", () => {
         const delay = new Date().valueOf();
         expect(j).toBe(job);
         expect(doc.after).toBeInstanceOf(Date);
-        expect(doc.after.valueOf()).toBeGreaterThanOrEqual(delay);
+        expect(doc.after.valueOf()).toBeGreaterThanOrEqual(delay - 1000);
         expect(doc.after.valueOf()).toBeLessThanOrEqual(delay + 1000);
       });
 
@@ -1095,10 +1095,10 @@ describe("Job", () => {
         });
 
         describe("echo option", () => {
-          let ogConsoleInfo = global.console.info;
-          let ogConsoleLog = global.console.log;
-          let ogConsoleWarn = global.console.warn;
-          let ogConsoleError = global.console.error;
+          const ogConsoleInfo = global.console.info;
+          const ogConsoleLog = global.console.log;
+          const ogConsoleWarn = global.console.warn;
+          const ogConsoleError = global.console.error;
 
           beforeAll(() => {
             global.console.info = jest.fn(() => {
@@ -1167,7 +1167,13 @@ describe("Job", () => {
             const runId = params[1];
             const completed = params[2];
             const total = params[3];
-            if ((id === "thisId") && (runId === "thatId") && (typeof completed === "number") && (typeof total === "number") && (completed >= 0 && completed <= total) && (total > 0)) {
+            if (
+              (id === "thisId") &&
+              (runId === "thatId") &&
+              (typeof completed === "number") &&
+              (typeof total === "number") &&
+              (completed >= 0 && completed <= total) && (total > 0)
+            ) {
               res = (100 * completed) / total;
             } else {
               res = false;
@@ -1205,7 +1211,7 @@ describe("Job", () => {
         });
 
         describe("echo option", () => {
-          let ogConsoleInfo = global.console.info;
+          const ogConsoleInfo = global.console.info;
 
           beforeAll(() => {
             global.console.info = jest.fn(() => {
@@ -1790,565 +1796,592 @@ describe("Job", () => {
   });
 });
 
-// //##########################################
+// ##########################################
 
-// describe("JobQueue", () => {
+describe("JobQueue", () => {
+  const ddp = new DDP();
+  let failCalls = 0;
+  let doneCalls = 0;
+  let numJobs = 5;
+  let originalDDPApply;
 
-//   const ddp = new DDP();
-//   let failCalls = 0;
-//   let doneCalls = 0;
-//   let numJobs = 5;
+  beforeAll(() => {
+    // eslint-disable-next-line camelcase
+    Job._ddp_apply = undefined;
+    Job.setDDP(ddp);
 
-//   before(() => {
-//     Job._ddp_apply = undefined;
-//     Job.setDDP(ddp);
-//     return sinon.stub(Job, "_ddp_apply").callsFake(makeDdpStub(function (name, params) {
-//       let err = null;
-//       let res = null;
-//       const makeJobDoc = function (idx) {
-//         if (idx == null) {
-//           idx = 0;
-//         }
-//         const job = new Job("root", "work", { idx });
-//         const doc = job._doc;
-//         doc._id = `thisId${idx}`;
-//         doc.runId = `thatId${idx}`;
-//         doc.status = "running";
-//         return doc;
-//       };
-//       switch (name) {
-//         case "root_jobDone":
-//           doneCalls++;
-//           res = true;
-//           break;
-//         case "root_jobFail":
-//           failCalls++;
-//           res = true;
-//           break;
-//         case "root_getWork":
-//           var type = params[0][0];
-//           var max = (params[1] != null
-//             ? params[1].maxJobs
-//             : undefined) != null
-//             ? (params[1] != null
-//               ? params[1].maxJobs
-//               : undefined)
-//             : 1;
-//           if (numJobs === 0) {
-//             res = [];
-//           } else {
-//             switch (type) {
-//               case "noWork":
-//                 res = [];
-//                 break;
-//               case "work":
-//                 numJobs--;
-//                 res = [makeJobDoc()];
-//                 break;
-//               case "workMax":
-//                 if (max < numJobs) {
-//                   max = numJobs;
-//                 }
-//                 numJobs -= max;
-//                 res = (__range__(1, max, true).map((i) => makeJobDoc(i)));
-//                 break;
-//               case "returnError":
-//                 err = new Error("MongoError: connection n to w.x.y.z:27017 timed out");
-//                 break;
-//             }
-//           }
-//           break;
-//         default:
-//           throw new Error(`Bad method name: ${name}`);
-//       }
-//       return [err, res];
-//     }));
-//   });
+    originalDDPApply = Job._ddp_apply;
+    // eslint-disable-next-line camelcase
+    Job._ddp_apply = jest.fn(makeDdpStub((name, params) => {
+      let err = null;
+      let res = null;
+      const makeJobDoc = (idx) => {
+        if (!idx) {
+          idx = 0; // eslint-disable-line no-param-reassign
+        }
+        const job = new Job("root", "work", { idx });
+        const doc = job._doc;
+        doc._id = `thisId${idx}`;
+        doc.runId = `thatId${idx}`;
+        doc.status = "running";
+        return doc;
+      };
+      switch (name) {
+        case "root_jobDone":
+          doneCalls += 1;
+          res = true;
+          break;
+        case "root_jobFail":
+          failCalls += 1;
+          res = true;
+          break;
+        case "root_getWork": {
+          const type = params[0][0];
+          let max = (params[1] && params[1].maxJobs) || 1;
+          if (numJobs === 0) {
+            res = [];
+          } else {
+            switch (type) {
+              case "noWork":
+                res = [];
+                break;
+              case "work":
+                numJobs -= 1;
+                res = [makeJobDoc()];
+                break;
+              case "workMax":
+                if (max < numJobs) {
+                  max = numJobs;
+                }
+                numJobs -= max;
+                res = (__range__(1, max, true).map((i) => makeJobDoc(i)));
+                break;
+              case "returnError":
+                err = new Error("MongoError: connection n to w.x.y.z:27017 timed out");
+                break;
+              default:
+                break;
+            }
+          }
+          break;
+        }
+        default:
+          throw new Error(`Bad method name: ${name}`);
+      }
+      return [err, res];
+    }));
+  });
 
-//   beforeEach(() => {
-//     failCalls = 0;
-//     doneCalls = 0;
-//     return numJobs = 5;
-//   });
+  beforeEach(() => {
+    failCalls = 0;
+    doneCalls = 0;
+    numJobs = 5;
+  });
 
-//   it("should throw when an invalid options are used", function (done) {
-//     assert.throws((() => Job.processJobs(42, "noWork", {}, function (job, cb) { })), /must be nonempty string/);
-//     assert.throws((() => Job.processJobs("", "noWork", {}, function (job, cb) { })), /must be nonempty string/);
-//     assert.throws((() => Job.processJobs("root", 42, {}, function (job, cb) { })), /must be nonempty string or array of nonempty strings/);
-//     assert.throws((() => Job.processJobs("root", "", {}, function (job, cb) { })), /must be nonempty string or array of nonempty strings/);
-//     assert.throws((() => Job.processJobs("root", [], {}, function (job, cb) { })), /must be nonempty string or array of nonempty strings/);
-//     assert.throws((() => Job.processJobs("root", [""], {}, function (job, cb) { })), /must be nonempty string or array of nonempty strings/);
-//     assert.throws((() => Job.processJobs("root", [
-//       "noWork", ""
-//     ], {}, function (job, cb) { })), /must be nonempty string or array of nonempty strings/);
-//     assert.throws((() => Job.processJobs("root", "noWork", {
-//       pollInterval: -1
-//     }, function (job, cb) { })), /must be a positive integer/);
-//     assert.throws((() => Job.processJobs("root", "noWork", {
-//       concurrency: "Bad"
-//     }, function (job, cb) { })), /must be a positive integer/);
-//     assert.throws((() => Job.processJobs("root", "noWork", {
-//       concurrency: -1
-//     }, function (job, cb) { })), /must be a positive integer/);
-//     assert.throws((() => Job.processJobs("root", "noWork", {
-//       payload: "Bad"
-//     }, function (job, cb) { })), /must be a positive integer/);
-//     assert.throws((() => Job.processJobs("root", "noWork", {
-//       payload: -1
-//     }, function (job, cb) { })), /must be a positive integer/);
-//     assert.throws((() => Job.processJobs("root", "noWork", {
-//       prefetch: "Bad"
-//     }, function (job, cb) { })), /must be a positive integer/);
-//     assert.throws((() => Job.processJobs("root", "noWork", {
-//       prefetch: -1
-//     }, function (job, cb) { })), /must be a positive integer/);
-//     assert.throws((() => Job.processJobs("root", "noWork", {
-//       workTimeout: "Bad"
-//     }, function (job, cb) { })), /must be a positive integer/);
-//     assert.throws((() => Job.processJobs("root", "noWork", {
-//       workTimeout: -1
-//     }, function (job, cb) { })), /must be a positive integer/);
-//     assert.throws((() => Job.processJobs("root", "noWork", {
-//       callbackStrict: 1
-//     }, function (job, cb) { })), /must be a boolean/);
-//     assert.throws((() => Job.processJobs("root", "noWork", {
-//       errorCallback: 1
-//     }, function (job, cb) { })), /must be a function/);
-//     return done();
-//   });
+  it("should throw when an invalid options are used", () => {
+    expect(() => new Job.processJobs(42, "noWork", {}, () => {})).toThrow(/must be nonempty string/);
+    expect(() => new Job.processJobs("", "noWork", {}, () => {})).toThrow(/must be nonempty string/);
+    expect(() => new Job.processJobs("root", 42, {}, () => {})).toThrow(/must be nonempty string or array of nonempty strings/);
+    expect(() => new Job.processJobs("root", "", {}, () => {})).toThrow(/must be nonempty string or array of nonempty strings/);
+    expect(() => new Job.processJobs("root", [], {}, () => {})).toThrow(/must be nonempty string or array of nonempty strings/);
+    expect(() => new Job.processJobs("root", [""], {}, () => {})).toThrow(/must be nonempty string or array of nonempty strings/);
+    expect(() => new Job.processJobs("root", ["noWork", ""], {}, () => {})).toThrow(/must be nonempty string or array of nonempty strings/);
+    expect(() => new Job.processJobs("root", "noWork", { pollInterval: -1 }, () => {})).toThrow(/must be a positive integer/);
+    expect(() => new Job.processJobs("root", "noWork", { concurrency: "Bad" }, () => {})).toThrow(/must be a positive integer/);
+    expect(() => new Job.processJobs("root", "noWork", { concurrency: -1 }, () => {})).toThrow(/must be a positive integer/);
+    expect(() => new Job.processJobs("root", "noWork", { payload: "Bad" }, () => {})).toThrow(/must be a positive integer/);
+    expect(() => new Job.processJobs("root", "noWork", { payload: -1 }, () => {})).toThrow(/must be a positive integer/);
+    expect(() => new Job.processJobs("root", "noWork", { prefetch: "Bad" }, () => {})).toThrow(/must be a positive integer/);
+    expect(() => new Job.processJobs("root", "noWork", { prefetch: -1 }, () => {})).toThrow(/must be a positive integer/);
+    expect(() => new Job.processJobs("root", "noWork", { workTimeout: "Bad" }, () => {})).toThrow(/must be a positive integer/);
+    expect(() => new Job.processJobs("root", "noWork", { workTimeout: -1 }, () => {})).toThrow(/must be a positive integer/);
+    expect(() => new Job.processJobs("root", "noWork", { callbackStrict: 1 }, () => {})).toThrow(/must be a boolean/);
+    expect(() => new Job.processJobs("root", "noWork", { errorCallback: 1 }, () => {})).toThrow(/must be a function/);
+  });
 
-//   it("should return a valid JobQueue when called", function (done) {
-//     const q = Job.processJobs("root", "noWork", {
-//       pollInterval: 100
-//     }, function (job, cb) {
-//       job.done();
-//       return cb(null);
-//     });
-//     assert.instanceOf(q, Job.processJobs);
-//     return q.shutdown({
-//       quiet: true
-//     }, () => {
-//       assert.equal(doneCalls, 0);
-//       assert.equal(failCalls, 0);
-//       return done();
-//     });
-//   });
+  it("should return a valid JobQueue when called", () => {
+    const q = new Job.processJobs("root", "noWork", {
+      pollInterval: 100
+    }, (job, cb) => {
+      job.done();
+      return cb(null);
+    });
+    expect(q).toBeInstanceOf(Job.processJobs);
+    return new Promise((resolve) => {
+      q.shutdown({
+        quiet: true
+      }, () => {
+        expect(doneCalls).toBe(0);
+        expect(failCalls).toBe(0);
+        resolve();
+      });
+    });
+  });
 
-//   it("should return a valid JobQueue when called with array of job types", function (done) {
-//     const q = Job.processJobs("root", [
-//       "noWork", "noWork2"
-//     ], {
-//         pollInterval: 100
-//       }, function (job, cb) {
-//         job.done();
-//         return cb(null);
-//       });
-//     assert.instanceOf(q, Job.processJobs);
-//     return q.shutdown({
-//       quiet: true
-//     }, () => {
-//       assert.equal(doneCalls, 0);
-//       assert.equal(failCalls, 0);
-//       return done();
-//     });
-//   });
+  it("should return a valid JobQueue when called with array of job types", () => {
+    const q = new Job.processJobs("root", [
+      "noWork", "noWork2"
+    ], {
+      pollInterval: 100
+    }, (job, cb) => {
+      job.done();
+      return cb(null);
+    });
+    expect(q).toBeInstanceOf(Job.processJobs);
+    return new Promise((resolve) => {
+      q.shutdown({
+        quiet: true
+      }, () => {
+        expect(doneCalls).toBe(0);
+        expect(failCalls).toBe(0);
+        resolve();
+      });
+    });
+  });
 
-//   it("should send shutdown notice to console when quiet is false", function (done) {
-//     const jobConsole = Job.__get__("console");
-//     const revert = Job.__set__({
-//       console: {
-//         info(...params) {
-//           throw new Error("info");
-//         },
-//         log(...params) {
-//           throw new Error("success");
-//         },
-//         warn(...params) {
-//           throw new Error("warning");
-//         },
-//         error(...params) {
-//           throw new Error("danger");
-//         }
-//       }
-//     });
-//     const q = Job.processJobs("root", "noWork", {
-//       pollInterval: 100
-//     }, function (job, cb) {
-//       job.done();
-//       return cb(null);
-//     });
-//     assert.instanceOf(q, Job.processJobs);
-//     assert.throws((() => q.shutdown(() => done())), /warning/);
-//     revert();
-//     return q.shutdown({
-//       quiet: true
-//     }, () => {
-//       assert.equal(doneCalls, 0);
-//       assert.equal(failCalls, 0);
-//       return done();
-//     });
-//   });
+  it("should send shutdown notice to console when quiet is false", () => {
+    const ogConsoleInfo = global.console.info;
+    const ogConsoleLog = global.console.log;
+    const ogConsoleWarn = global.console.warn;
+    const ogConsoleError = global.console.error;
 
-//   it("should invoke worker when work is returned", function (done) {
-//     let q;
-//     return q = Job.processJobs("root", "work", {
-//       pollInterval: 100
-//     }, function (job, cb) {
-//       job.done();
-//       q.shutdown({
-//         quiet: true
-//       }, () => {
-//         assert.equal(doneCalls, 1);
-//         assert.equal(failCalls, 0);
-//         return done();
-//       });
-//       return cb(null);
-//     });
-//   });
+    global.console.info = jest.fn(() => {
+      throw new Error("info");
+    });
 
-//   it("should invoke worker when work is returned from a manual trigger", function (done) {
-//     var q = Job.processJobs("root", "work", {
-//       pollInterval: 0
-//     }, function (job, cb) {
-//       job.done();
-//       q.shutdown({
-//         quiet: true
-//       }, () => {
-//         assert.equal(doneCalls, 1);
-//         assert.equal(failCalls, 0);
-//         return done();
-//       });
-//       return cb(null);
-//     });
-//     assert.equal(q.pollInterval, Job.forever);
-//     assert.isNull(q._interval);
-//     return setTimeout(() => q.trigger(), 20);
-//   });
+    global.console.log = jest.fn(() => {
+      throw new Error("success");
+    });
 
-//   it("should successfully start in paused state and resume", function (done) {
-//     let flag = false;
-//     var q = Job.processJobs("root", "work", {
-//       pollInterval: 10
-//     }, function (job, cb) {
-//       assert.isTrue(flag);
-//       job.done();
-//       q.shutdown({
-//         quiet: true
-//       }, () => {
-//         assert.equal(doneCalls, 1);
-//         assert.equal(failCalls, 0);
-//         return done();
-//       });
-//       return cb(null);
-//     }).pause();
-//     return setTimeout(() => {
-//       flag = true;
-//       return q.resume();
-//     }, 20);
-//   });
+    global.console.warn = jest.fn(() => {
+      throw new Error("warning");
+    });
 
-//   it("should successfully accept multiple jobs from getWork", function (done) {
-//     let q;
-//     let count = 5;
-//     return q = Job.processJobs("root", "workMax", {
-//       pollInterval: 100,
-//       prefetch: 4
-//     }, function (job, cb) {
-//       assert.equal(q.length(), count - 1, "q.length is incorrect");
-//       assert.equal(q.running(), 1, "q.running is incorrect");
-//       if (count === 5) {
-//         assert.isTrue(q.full(), "q.full should be true");
-//         assert.isFalse(q.idle(), "q.idle should be false");
-//       }
-//       job.done();
-//       count--;
-//       if (count === 0) {
-//         q.shutdown({
-//           quiet: true
-//         }, () => {
-//           assert.equal(doneCalls, 5, "doneCalls is incorrect");
-//           assert.equal(failCalls, 0, "failCalls is incorrect");
-//           return done();
-//         });
-//       }
-//       return cb(null);
-//     });
-//   });
+    global.console.error = jest.fn(() => {
+      throw new Error("danger");
+    });
 
-//   it("should successfully accept and process multiple simultaneous jobs concurrently", function (done) {
-//     let q;
-//     let count = 0;
-//     return q = Job.processJobs("root", "workMax", {
-//       pollInterval: 100,
-//       concurrency: 5
-//     }, function (job, cb) {
-//       count++;
-//       return setTimeout(() => {
-//         assert.equal(q.length(), 0);
-//         assert.equal(q.running(), count);
-//         count--;
-//         job.done();
-//         if (!(count > 0)) {
-//           q.shutdown({
-//             quiet: true
-//           }, () => {
-//             assert.equal(doneCalls, 5);
-//             assert.equal(failCalls, 0);
-//             return done();
-//           });
-//         }
-//         return cb(null);
-//       }, 25);
-//     });
-//   });
+    const revert = () => {
+      global.console.info = ogConsoleInfo;
+      global.console.log = ogConsoleLog;
+      global.console.warn = ogConsoleWarn;
+      global.console.error = ogConsoleError;
+    };
+    const q = new Job.processJobs("root", "noWork", {
+      pollInterval: 100
+    }, (job, cb) => {
+      job.done();
+      return cb(null);
+    });
+    expect(q).toBeInstanceOf(Job.processJobs);
+    return new Promise((resolve) => {
+      expect(() => q.shutdown(() => resolve())).toThrow(/warning/);
+      revert();
+      q.shutdown({
+        quiet: true
+      }, () => {
+        expect(doneCalls).toBe(0);
+        expect(failCalls).toBe(0);
+        resolve();
+      });
+    });
+  });
 
-//   it("should successfully accept and process multiple simultaneous jobs in one worker", function (done) {
-//     let q;
-//     return q = Job.processJobs("root", "workMax", {
-//       pollInterval: 100,
-//       payload: 5
-//     }, function (jobs, cb) {
-//       assert.equal(jobs.length, 5);
-//       assert.equal(q.length(), 0);
-//       assert.equal(q.running(), 1);
-//       for (let j of Array.from(jobs)) {
-//         j.done();
-//       }
-//       q.shutdown({
-//         quiet: true
-//       }, () => {
-//         assert.equal(doneCalls, 5);
-//         assert.equal(failCalls, 0);
-//         return done();
-//       });
-//       return cb();
-//     });
-//   });
+  it("should invoke worker when work is returned", () => (
+    new Promise((resolve) => {
+      const q = new Job.processJobs("root", "work", {
+        pollInterval: 100
+      }, (job, cb) => {
+        job.done();
+        q.shutdown({
+          quiet: true
+        }, () => {
+          expect(doneCalls).toBe(1);
+          expect(failCalls).toBe(0);
+          resolve();
+        });
+        cb(null);
+      });
+    })
+  ));
 
-//   it("should successfully accept and process multiple simultaneous jobs concurrently and within workers", function (done) {
-//     let q;
-//     let count = 0;
-//     numJobs = 25;
-//     return q = Job.processJobs("root", "workMax", {
-//       pollInterval: 100,
-//       payload: 5,
-//       concurrency: 5
-//     }, function (jobs, cb) {
-//       count += jobs.length;
-//       return setTimeout(() => {
-//         assert.equal(q.length(), 0);
-//         assert.equal(q.running(), count / 5);
-//         count -= jobs.length;
-//         for (let j of Array.from(jobs)) {
-//           j.done();
-//         }
-//         if (!(count > 0)) {
-//           q.shutdown({
-//             quiet: true
-//           }, () => {
-//             assert.equal(doneCalls, 25);
-//             assert.equal(failCalls, 0);
-//             return done();
-//           });
-//         }
-//         return cb(null);
-//       }, 25);
-//     });
-//   });
+  it("should invoke worker when work is returned from a manual trigger", () => (
+    new Promise((resolve) => {
+      const q = new Job.processJobs("root", "work", {
+        pollInterval: 0
+      }, (job, cb) => {
+        job.done();
+        q.shutdown({
+          quiet: true
+        }, () => {
+          expect(doneCalls).toBe(1);
+          expect(failCalls).toBe(0);
+          resolve();
+        });
+        cb(null);
+      });
+      expect(q.pollInterval).toBe(Job.forever);
+      expect(q._interval).toBeNull();
+      setTimeout(() => q.trigger(), 20);
+    })
+  ));
 
-//   it("should successfully perform a soft shutdown", function (done) {
-//     let q;
-//     let count = 5;
-//     return q = Job.processJobs("root", "workMax", {
-//       pollInterval: 100,
-//       prefetch: 4
-//     }, function (job, cb) {
-//       count--;
-//       assert.equal(q.length(), count);
-//       assert.equal(q.running(), 1);
-//       assert.isTrue(q.full());
-//       job.done();
-//       if (count === 4) {
-//         q.shutdown({
-//           quiet: true,
-//           level: "soft"
-//         }, () => {
-//           assert(count === 0);
-//           assert.equal(q.length(), 0);
-//           assert.isFalse(Job._ddp_apply.calledWith("root_jobFail"));
-//           assert.equal(doneCalls, 5);
-//           assert.equal(failCalls, 0);
-//           return done();
-//         });
-//       }
-//       return cb(null);
-//     });
-//   });
+  it("should successfully start in paused state and resume", () => (
+    new Promise((resolve) => {
+      let flag = false;
+      const q = new Job.processJobs("root", "work", {
+        pollInterval: 10
+      }, (job, cb) => {
+        expect(flag).toBeTruthy();
+        job.done();
+        q.shutdown({
+          quiet: true
+        }, () => {
+          expect(doneCalls).toBe(1);
+          expect(failCalls).toBe(0);
+          resolve();
+        });
+        return cb(null);
+      }).pause();
+      setTimeout(() => {
+        flag = true;
+        q.resume();
+      }, 20);
+    })
+  ));
 
-//   it("should successfully perform a normal shutdown", function (done) {
-//     let q;
-//     let count = 5;
-//     return q = Job.processJobs("root", "workMax", {
-//       pollInterval: 100,
-//       concurrency: 2,
-//       prefetch: 3
-//     }, (job, cb) => setTimeout(() => {
-//       count--;
-//       job.done();
-//       if (count === 4) {
-//         q.shutdown({
-//           quiet: true,
-//           level: "normal"
-//         }, () => {
-//           assert.equal(count, 3);
-//           assert.equal(q.length(), 0);
-//           assert.isTrue(Job._ddp_apply.calledWith("root_jobFail"));
-//           assert.equal(doneCalls, 2);
-//           assert.equal(failCalls, 3);
-//           return done();
-//         });
-//       }
-//       return cb(null);
-//     }, 25));
-//   });
+  it("should successfully accept multiple jobs from getWork", () => {
+    let q;
+    let count = 5;
+    return new Promise((resolve) => {
+      q = new Job.processJobs("root", "workMax", {
+        pollInterval: 100,
+        prefetch: 4
+      }, (job, cb) => {
+        expect(q.length()).toBe(count - 1);
+        expect(q.running()).toBe(1);
+        if (count === 5) {
+          expect(q.full()).toBeTruthy();
+          expect(q.idle()).toBeFalsy();
+        }
+        job.done();
+        count -= 1;
+        if (count === 0) {
+          q.shutdown({
+            quiet: true
+          }, () => {
+            expect(doneCalls).toBe(5);
+            expect(failCalls).toBe(0);
+            resolve();
+          });
+        }
+        cb(null);
+      });
+    });
+  });
 
-//   it("should successfully perform a normal shutdown with both payload and concurrency", function (done) {
-//     let q;
-//     let count = 0;
-//     numJobs = 25;
-//     return q = Job.processJobs("root", "workMax", {
-//       pollInterval: 100,
-//       payload: 5,
-//       concurrency: 2,
-//       prefetch: 15
-//     }, function (jobs, cb) {
-//       count += jobs.length;
-//       return setTimeout(() => {
-//         assert.equal(q.running(), count / 5);
-//         count -= jobs.length;
-//         for (let j of Array.from(jobs)) {
-//           j.done();
-//         }
-//         if (count === 5) {
-//           q.shutdown({
-//             quiet: true
-//           }, () => {
-//             assert.equal(q.length(), 0, "jobs remain in task list");
-//             assert.equal(count, 0, "count is wrong value");
-//             assert.isTrue(Job._ddp_apply.calledWith("root_jobFail"));
-//             assert.equal(doneCalls, 10);
-//             assert.equal(failCalls, 15);
-//             return done();
-//           });
-//         }
-//         return cb(null);
-//       }, 25);
-//     });
-//   });
+  it("should successfully accept and process multiple simultaneous jobs concurrently", () => {
+    let q;
+    let count = 0;
+    return new Promise((resolve) => {
+      q = new Job.processJobs("root", "workMax", {
+        pollInterval: 100,
+        concurrency: 5
+      }, (job, cb) => {
+        count += 1;
+        return setTimeout(() => {
+          expect(q.length()).toBe(0);
+          expect(q.running()).toBe(count);
+          count -= 1;
+          job.done();
+          if (!(count > 0)) {
+            q.shutdown({
+              quiet: true
+            }, () => {
+              expect(doneCalls).toBe(5);
+              expect(failCalls).toBe(0);
+              resolve();
+            });
+          }
+          return cb(null);
+        }, 25);
+      });
+    });
+  });
 
-//   it("should successfully perform a hard shutdown", function (done) {
-//     let q;
-//     let count = 0;
-//     let time = 20;
-//     return q = Job.processJobs("root", "workMax", {
-//       pollInterval: 100,
-//       concurrency: 2,
-//       prefetch: 3
-//     }, function (job, cb) {
-//       setTimeout(() => {
-//         count++;
-//         if (count === 1) {
-//           job.done();
-//           q.shutdown({
-//             level: "hard",
-//             quiet: true
-//           }, () => {
-//             assert.equal(q.length(), 0);
-//             assert.equal(count, 1);
-//             assert.isTrue(Job._ddp_apply.calledWith("root_jobFail"));
-//             assert.equal(doneCalls, 1, "wrong number of .done() calls");
-//             assert.equal(failCalls, 4, "wrong number of .fail() calls");
-//             return done();
-//           });
-//           return cb(null);
-//         }
-//       }, // Other workers will never call back
-//         time);
-//       return time += 20;
-//     });
-//   });
+  it("should successfully accept and process multiple simultaneous jobs in one worker", () => {
+    let q;
+    return new Promise((resolve) => {
+      q = new Job.processJobs("root", "workMax", {
+        pollInterval: 100,
+        payload: 5
+      }, (jobs, cb) => {
+        expect(jobs.length).toBe(5);
+        expect(q.length()).toBe(0);
+        expect(q.running()).toBe(1);
+        for (const j of Array.from(jobs)) {
+          j.done();
+        }
+        q.shutdown({
+          quiet: true
+        }, () => {
+          expect(doneCalls).toBe(5);
+          expect(failCalls).toBe(0);
+          resolve();
+        });
+        cb();
+      });
+    });
+  });
 
-//   it("should throw when using callbackStrict option and multiple callback invokes happen", function (done) {
-//     let q;
-//     return q = Job.processJobs("root", "work", {
-//       callbackStrict: true,
-//       pollInterval: 100,
-//       concurrency: 1,
-//       prefetch: 0
-//     }, (job, cb) => setTimeout(() => {
-//       job.done();
-//       cb();
-//       assert.throws(cb, /callback was invoked multiple times/);
-//       return q.shutdown({
-//         level: "hard",
-//         quiet: true
-//       }, () => {
-//         assert.equal(doneCalls, 1);
-//         assert.equal(failCalls, 0);
-//         return done();
-//       });
-//     }, 25));
-//   });
+  it("should successfully accept and process multiple simultaneous jobs concurrently and within workers", () => {
+    let q;
+    let count = 0;
+    numJobs = 25;
+    return new Promise((resolve) => {
+      q = new Job.processJobs("root", "workMax", {
+        pollInterval: 100,
+        payload: 5,
+        concurrency: 5
+      }, (jobs, cb) => {
+        count += jobs.length;
+        return setTimeout(() => {
+          expect(q.length()).toBe(0);
+          expect(q.running()).toBe(count / 5);
+          count -= jobs.length;
+          for (const j of Array.from(jobs)) {
+            j.done();
+          }
+          if (!(count > 0)) {
+            q.shutdown({
+              quiet: true
+            }, () => {
+              expect(doneCalls).toBe(25);
+              expect(failCalls).toBe(0);
+              resolve();
+            });
+          }
+          cb(null);
+        }, 25);
+      });
+    });
+  });
 
-//   it("should throw when using callbackStrict option and multiple callback invokes happen 2", function (done) {
-//     let q;
-//     return q = Job.processJobs("root", "work", {
-//       callbackStrict: true,
-//       pollInterval: 100,
-//       concurrency: 1,
-//       prefetch: 0
-//     }, (job, cb) => setTimeout(() => {
-//       job.done(() => {
-//         assert.throws(cb, /callback was invoked multiple times/);
-//         return q.shutdown({
-//           level: "hard",
-//           quiet: true
-//         }, () => {
-//           assert.equal(doneCalls, 1);
-//           assert.equal(failCalls, 0);
-//           return done();
-//         });
-//       });
-//       return cb();
-//     }, 25));
-//   });
+  it("should successfully perform a soft shutdown", () => {
+    let q;
+    let count = 5;
+    return new Promise((resolve) => {
+      q = new Job.processJobs("root", "workMax", {
+        pollInterval: 100,
+        prefetch: 4
+      }, (job, cb) => {
+        count -= 1;
+        expect(q.length()).toBe(count);
+        expect(q.running()).toBe(1);
+        expect(q.full()).toBeTruthy();
+        job.done();
+        if (count === 4) {
+          q.shutdown({
+            quiet: true,
+            level: "soft"
+          }, () => {
+            expect(count).toBe(0);
+            expect(q.length()).toBe(0);
+            expect(Job._ddp_apply.mock.calls[count][0]).not.toBe("root_jobFail");
+            expect(doneCalls).toBe(5);
+            expect(failCalls).toBe(0);
+            resolve();
+          });
+        }
+        cb(null);
+      });
+    });
+  });
 
-//   it("should invoke errorCallback when an error is returned from getWork", function (done) {
-//     let q;
-//     const ecb = function (err, res) {
-//       assert.instanceOf(err, Error);
-//       return q.shutdown({
-//         level: "hard",
-//         quiet: true
-//       }, () => {
-//         assert.equal(doneCalls, 0);
-//         assert.equal(failCalls, 0);
-//         return done();
-//       });
-//     };
+  it("should successfully perform a normal shutdown", () => {
+    let q;
+    let count = 5;
+    return new Promise((resolve) => {
+      q = new Job.processJobs("root", "workMax", {
+        pollInterval: 100,
+        concurrency: 2,
+        prefetch: 3
+      }, (job, cb) => setTimeout(() => {
+        count -= 1;
+        job.done();
+        if (count === 4) {
+          q.shutdown({
+            quiet: true,
+            level: "normal"
+          }, () => {
+            expect(count).toBe(3);
+            expect(q.length()).toBe(0);
+            expect(Job._ddp_apply.mock.calls[count][0]).toBe("root_jobFail");
+            expect(doneCalls).toBe(2);
+            expect(failCalls).toBe(3);
+            resolve();
+          });
+        }
+        cb(null);
+      }, 25));
+    });
+  });
 
-//     return q = Job.processJobs("root", "returnError", {
-//       pollInterval: 100,
-//       concurrency: 1,
-//       prefetch: 0,
-//       errorCallback: ecb
-//     }, function (job, cb) { });
-//   });
+  it("should successfully perform a normal shutdown with both payload and concurrency", () => {
+    let q;
+    let count = 0;
+    numJobs = 25;
+    return new Promise((resolve) => {
+      q = new Job.processJobs("root", "workMax", {
+        pollInterval: 100,
+        payload: 5,
+        concurrency: 2,
+        prefetch: 15
+      }, (jobs, cb) => {
+        count += jobs.length;
+        return setTimeout(() => {
+          expect(q.running()).toBe(count / 5);
+          count -= jobs.length;
+          for (const j of Array.from(jobs)) {
+            j.done();
+          }
+          if (count === 5) {
+            q.shutdown({
+              quiet: true
+            }, () => {
+              expect(q.length()).toBe(0);
+              expect(count).toBe(0);
+              expect(Job._ddp_apply.mock.calls[Job._ddp_apply.mock.calls.length - 1][0]).toBe("root_jobFail");
+              expect(doneCalls).toBe(10);
+              expect(failCalls).toBe(15);
+              resolve();
+            });
+          }
+          return cb(null);
+        }, 25);
+      });
+    });
+  });
 
-//   afterEach(() => Job._ddp_apply.resetHistory());
+  it("should successfully perform a hard shutdown", () => {
+    let q;
+    let count = 0;
+    let time = 20;
+    return new Promise((resolve) => {
+      q = new Job.processJobs("root", "workMax", {
+        pollInterval: 100,
+        concurrency: 2,
+        prefetch: 3
+      }, (job, cb) => {
+        setTimeout(
+          () => {
+            count += 1;
+            if (count === 1) {
+              job.done();
+              q.shutdown({
+                level: "hard",
+                quiet: true
+              }, () => {
+                expect(q.length()).toBe(0);
+                expect(count).toBe(1);
+                expect(Job._ddp_apply.mock.calls[Job._ddp_apply.mock.calls.length - 1][0]).toBe("root_jobFail");
+                expect(doneCalls).toBe(1);
+                expect(failCalls).toBe(4);
+                resolve();
+              });
+              cb(null);
+            }
+          }, // Other workers will never call back
+          time
+        );
+        time += 20;
+      });
+    });
+  });
 
-//   return after(() => Job._ddp_apply.restore());
-// });
+  it("should throw when using callbackStrict option and multiple callback invokes happen", () => {
+    let q;
+    return new Promise((resolve) => {
+      q = new Job.processJobs("root", "work", {
+        callbackStrict: true,
+        pollInterval: 100,
+        concurrency: 1,
+        prefetch: 0
+      }, (job, cb) => setTimeout(() => {
+        job.done();
+        cb();
+        expect(cb).toThrow(/callback was invoked multiple times/);
+        return q.shutdown({
+          level: "hard",
+          quiet: true
+        }, () => {
+          expect(doneCalls).toBe(1);
+          expect(failCalls).toBe(0);
+          resolve();
+        });
+      }, 25));
+    });
+  });
+
+  it("should throw when using callbackStrict option and multiple callback invokes happen 2", () => {
+    let q;
+    return new Promise((resolve) => {
+      q = new Job.processJobs("root", "work", {
+        callbackStrict: true,
+        pollInterval: 100,
+        concurrency: 1,
+        prefetch: 0
+      }, (job, cb) => setTimeout(() => {
+        job.done(() => {
+          expect(cb).toThrow(/callback was invoked multiple times/);
+          return q.shutdown({
+            level: "hard",
+            quiet: true
+          }, () => {
+            expect(doneCalls).toBe(1);
+            expect(failCalls).toBe(0);
+            resolve();
+          });
+        });
+        return cb();
+      }, 25));
+    });
+  });
+
+  it("should invoke errorCallback when an error is returned from getWork", () => {
+    let q;
+    return new Promise((resolve) => {
+      const ecb = (err) => {
+        expect(err).toBeInstanceOf(Error);
+        return q.shutdown({
+          level: "hard",
+          quiet: true
+        }, () => {
+          expect(doneCalls).toBe(0);
+          expect(failCalls).toBe(0);
+          resolve();
+        });
+      };
+
+      q = new Job.processJobs("root", "returnError", {
+        pollInterval: 100,
+        concurrency: 1,
+        prefetch: 0,
+        errorCallback: ecb
+      }, () => {});
+    });
+  });
+
+  afterEach(() => {
+    Job._ddp_apply.mockClear();
+  });
+
+  afterAll(() => {
+    // eslint-disable-next-line camelcase
+    Job._ddp_apply = originalDDPApply;
+  });
+});
+
 function __range__(left, right, inclusive) {
   const range = [];
   const ascending = left < right;
