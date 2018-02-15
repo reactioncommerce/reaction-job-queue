@@ -29,8 +29,6 @@ jobs:
 
       - run: npm test
 
-      - run: npm run build
-
       - save_cache:
           paths:
             - node_modules
@@ -51,7 +49,11 @@ jobs:
           # fallback to using the latest cache if no exact match is found
           - v1-dependencies-
 
-      - run: cd dist && npx semantic-release
+      - run: npm install
+
+      - run: npm run build
+
+      - run: cd dist & npx semantic-release
 
 workflows:
   version: 2
