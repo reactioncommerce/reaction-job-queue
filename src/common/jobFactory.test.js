@@ -1601,89 +1601,106 @@ describe("Job", () => {
         });
       });
 
-      // describe("get Job(s) by ID", () => {
+      describe("get Job(s) by ID", () => {
+        const getJobStub = (name, params) => {
+          let res;
+          let j;
+          if (name !== "root_getJob") {
+            throw new Error("Bad method name");
+          }
+          const ids = params[0];
 
-      //   const getJobStub = function (name, params) {
-      //     let res;
-      //     let j;
-      //     if (name !== "root_getJob") {
-      //       throw new Error("Bad method name");
-      //     }
-      //     const ids = params[0];
+          const one = (id) => {
+            j = (() => {
+              switch (id) {
+                case "goodID": {
+                  const jobInstance = new Job("root", "work", { i: 1 });
+                  return jobInstance._doc;
+                }
+                default:
+                  return undefined;
+              }
+            })();
+            return j;
+          };
 
-      //     const one = function (id) {
-      //       j = (() => {
-      //         switch (id) {
-      //           case "goodID":
-      //             return Job("root", "work", { i: 1 })._doc;
-      //           default:
-      //             return undefined;
-      //         }
-      //       })();
-      //       return j;
-      //     };
+          if (ids instanceof Array) {
+            res = ((() => {
+              const result = [];
+              for (j of Array.from(ids)) {
+                if (j === "goodID") {
+                  result.push(one(j));
+                }
+              }
+              return result;
+            })());
+          } else {
+            res = one(ids);
+          }
 
-      //     if (ids instanceof Array) {
-      //       res = ((() => {
-      //         const result = [];
-      //         for (j of Array.from(ids)) {
-      //           if (j === "goodID") {
-      //             result.push(one(j));
-      //           }
-      //         }
-      //         return result;
-      //       })());
-      //     } else {
-      //       res = one(ids);
-      //     }
+          return [null, res];
+        };
 
-      //     return [null, res];
-      //   };
+        describe("getJob", () => {
+          beforeAll(() => {
+            originalDDPApply = Job._ddp_apply;
+            // eslint-disable-next-line camelcase
+            Job._ddp_apply = jest.fn(makeDdpStub(getJobStub));
+          });
 
-      //   describe("getJob", () => {
+          it("should return a valid job instance when called with a good id", () => {
+            const res = Job.getJob("root", "goodID");
+            expect(res).toBeInstanceOf(Job);
+          });
 
-      //     before(() => sinon.stub(Job, "_ddp_apply").callsFake(makeDdpStub(getJobStub)));
+          it("should return undefined when called with a bad id", () => {
+            const res = Job.getJob("root", "badID");
+            expect(res).toBeUndefined();
+          });
 
-      //     it("should return a valid job instance when called with a good id", () => {
-      //       const res = Job.getJob("root", "goodID");
-      //       return assert.instanceOf(res, Job);
-      //     });
+          afterEach(() => {
+            Job._ddp_apply.mockClear();
+          });
 
-      //     it("should return undefined when called with a bad id", () => {
-      //       const res = Job.getJob("root", "badID");
-      //       return assert.isUndefined(res);
-      //     });
+          afterAll(() => {
+            // eslint-disable-next-line camelcase
+            Job._ddp_apply = originalDDPApply;
+          });
+        });
 
-      //     afterEach(() => Job._ddp_apply.resetHistory());
+        describe("getJobs", () => {
+          beforeAll(() => {
+            originalDDPApply = Job._ddp_apply;
+            // eslint-disable-next-line camelcase
+            Job._ddp_apply = jest.fn(makeDdpStub(getJobStub));
+          });
 
-      //     return after(() => Job._ddp_apply.restore());
-      //   });
+          it("should return valid job instances for good IDs only", () => {
+            const res = Job.getJobs("root", ["goodID", "badID", "goodID"]);
+            expect(Job._ddp_apply).toHaveBeenCalledTimes(1);
+            expect(Array.isArray(res)).toBeTruthy();
+            expect(res).toHaveLength(2);
+            expect(res[0]).toBeInstanceOf(Job);
+            expect(res[1]).toBeInstanceOf(Job);
+          });
 
-      //   return describe("getJobs", () => {
+          it("should return an empty array for all bad IDs", () => {
+            const res = Job.getJobs("root", ["badID", "badID", "badID"]);
+            expect(Job._ddp_apply).toHaveBeenCalledTimes(1);
+            expect(Array.isArray(res)).toBeTruthy();
+            expect(res).toHaveLength(0);
+          });
 
-      //     before(() => sinon.stub(Job, "_ddp_apply").callsFake(makeDdpStub(getJobStub)));
+          afterEach(() => {
+            Job._ddp_apply.mockClear();
+          });
 
-      //     it("should return valid job instances for good IDs only", () => {
-      //       const res = Job.getJobs("root", ["goodID", "badID", "goodID"]);
-      //       assert(Job._ddp_apply.calledOnce, "getJob method called more than once");
-      //       assert.isArray(res);
-      //       assert.lengthOf(res, 2);
-      //       assert.instanceOf(res[0], Job);
-      //       return assert.instanceOf(res[1], Job);
-      //     });
-
-      //     it("should return an empty array for all bad IDs", () => {
-      //       const res = Job.getJobs("root", ["badID", "badID", "badID"]);
-      //       assert(Job._ddp_apply.calledOnce, "getJob method called more than once");
-      //       assert.isArray(res);
-      //       return assert.lengthOf(res, 0);
-      //     });
-
-      //     afterEach(() => Job._ddp_apply.resetHistory());
-
-      //     return after(() => Job._ddp_apply.restore());
-      //   });
-      // });
+          afterAll(() => {
+            // eslint-disable-next-line camelcase
+            Job._ddp_apply = originalDDPApply;
+          });
+        });
+      });
 
       // describe("multijob operation", () => {
 
