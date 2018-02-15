@@ -1702,47 +1702,54 @@ describe("Job", () => {
         });
       });
 
-      // describe("multijob operation", () => {
+      describe("multijob operation", () => {
+        const makeMulti = (op, method) => describe(op, () => {
+          beforeAll(() => {
+            originalDDPApply = Job._ddp_apply;
+            // eslint-disable-next-line camelcase
+            Job._ddp_apply = jest.fn(makeDdpStub((name, params) => {
+              if (name !== `root_${method}`) {
+                throw new Error(`Bad method name: ${name}`);
+              }
+              const ids = params[0];
+              return [
+                null, ids.indexOf("goodID") !== -1
+              ];
+            }));
+          });
 
-      //   const makeMulti = (op, method) => describe(op, () => {
+          it("should return true if there are any good IDs", () => {
+            expect(typeof Job[op]).toBe("function");
+            const res = Job[op]("root", ["goodID", "badID", "goodID"]);
+            expect(Job._ddp_apply).toHaveBeenCalledTimes(1);
+            expect(typeof res).toBe("boolean");
+            expect(res).toBe(true);
+          });
 
-      //     before(() => sinon.stub(Job, "_ddp_apply").callsFake(makeDdpStub(function (name, params) {
-      //       if (name !== `root_${method}`) {
-      //         throw new Error(`Bad method name: ${name}`);
-      //       }
-      //       const ids = params[0];
-      //       return [
-      //         null, ids.indexOf("goodID") !== -1
-      //       ];
-      //     })));
+          it("should return false if there are all bad IDs", () => {
+            expect(typeof Job[op]).toBe("function");
+            const res = Job[op]("root", ["badID", "badID"]);
+            expect(Job._ddp_apply).toHaveBeenCalledTimes(1);
+            expect(typeof res).toBe("boolean");
+            expect(res).toBe(false);
+          });
 
-      //     it("should return true if there are any good IDs", () => {
-      //       assert.isFunction(Job[op]);
-      //       const res = Job[op]("root", ["goodID", "badID", "goodID"]);
-      //       assert(Job._ddp_apply.calledOnce, `${op} method called more than once`);
-      //       assert.isBoolean(res);
-      //       return assert.isTrue(res);
-      //     });
+          afterEach(() => {
+            Job._ddp_apply.mockClear();
+          });
 
-      //     it("should return false if there are all bad IDs", () => {
-      //       assert.isFunction(Job[op]);
-      //       const res = Job[op]("root", ["badID", "badID"]);
-      //       assert(Job._ddp_apply.calledOnce, `${op} method called more than once`);
-      //       assert.isBoolean(res);
-      //       return assert.isFalse(res);
-      //     });
+          afterAll(() => {
+            // eslint-disable-next-line camelcase
+            Job._ddp_apply = originalDDPApply;
+          });
+        });
 
-      //     afterEach(() => Job._ddp_apply.resetHistory());
-
-      //     return after(() => Job._ddp_apply.restore());
-      //   });
-
-      //   makeMulti("pauseJobs", "jobPause");
-      //   makeMulti("resumeJobs", "jobResume");
-      //   makeMulti("cancelJobs", "jobCancel");
-      //   makeMulti("restartJobs", "jobRestart");
-      //   return makeMulti("removeJobs", "jobRemove");
-      // });
+        makeMulti("pauseJobs", "jobPause");
+        makeMulti("resumeJobs", "jobResume");
+        makeMulti("cancelJobs", "jobCancel");
+        makeMulti("restartJobs", "jobRestart");
+        makeMulti("removeJobs", "jobRemove");
+      });
 
       // return describe("control method", () => {
 
