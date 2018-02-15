@@ -32,27 +32,14 @@ class DDP {
         case "root_error":
           process.nextTick(() => cb(new Error("Method failed")));
           break;
+        case "test":
+          process.nextTick(() => cb(null, params[0]));
+          break;
         default:
           process.nextTick(() => cb(new Error("Bad method in call")));
       }
     }
   }
-
-//   connect() {
-//     return process.nextTick(() => cb(null));
-//   }
-
-//   close() {
-//     return process.nextTick(() => cb(null));
-//   }
-
-//   subscribe() {
-//     return process.nextTick(() => cb(null));
-//   }
-
-//   observe() {
-//     return process.nextTick(() => cb(null));
-//   }
 }
 
 const makeDdpStub = (action) => (name, params, cb) => {
@@ -169,26 +156,26 @@ describe("Job", () => {
   describe("Fiber support", () => {
     const ddp = new DDP();
 
-    // it("accepts a valid collection name and Fiber object and properly yields and runs", () => {
-    //   const spy = jest.spyOn(ddp, "call");
-    //   Job.setDDP(ddp, "test1", Fiber);
+    it("accepts a valid collection name and Fiber object and properly yields and runs", () => {
+      const spy = jest.spyOn(ddp, "call");
+      Job.setDDP(ddp, "test1", Fiber);
 
-    //   const fib = Fiber(() => Job._ddp_apply.test1("test", []));
-    //   fib.run();
+      const fib = Fiber(() => Job._ddp_apply.test1("test", []));
+      fib.run();
 
-    //   expect(spy).toHaveBeenCalledTimes(1);
-    //   spy.mockClear();
-    // });
+      expect(spy).toHaveBeenCalledTimes(1);
+      spy.mockClear();
+    });
 
-    // it("accepts a default collection name and valid Fiber object and properly yields and runs", () => {
-    //   const spy = jest.spyOn(ddp, "call");
-    //   Job.setDDP(ddp, Fiber);
+    it("accepts a default collection name and valid Fiber object and properly yields and runs", () => {
+      const spy = jest.spyOn(ddp, "call");
+      Job.setDDP(ddp, Fiber);
 
-    //   const fib = Fiber(() => Job._ddp_apply("test", []));
-    //   fib.run();
-    //   expect(spy).toHaveBeenCalledTimes(1);
-    //   spy.mockClear();
-    // });
+      const fib = Fiber(() => Job._ddp_apply("test", []));
+      fib.run();
+      expect(spy).toHaveBeenCalledTimes(1);
+      spy.mockClear();
+    });
 
     it("properly returns values from method calls", () => (
       new Promise((resolve) => {
@@ -1257,7 +1244,7 @@ describe("Job", () => {
             }
             const id = params[0];
             const runId = params[1];
-            const result = params[2];            
+            const result = params[2];
             const options = params[3];
             if ((id === "thisId") && (runId === "thatId") && (typeof result === "object")) {
               res = result;
