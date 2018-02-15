@@ -1,4 +1,4 @@
-// const Fiber = require("fibers");
+const Fiber = require("fibers");
 const { createJobClass } = require("./jobFactory");
 
 const { Job, ...JobPrivate } = createJobClass({ isTest: true });
@@ -170,64 +170,64 @@ describe("Job", () => {
     });
   });
 
-  // describe("Fiber support", () => {
-  //   const ddp = new DDP();
+  describe("Fiber support", () => {
+    const ddp = new DDP();
 
-  //   it("accepts a valid collection name and Fiber object and properly yields and runs", () => {
-  //     const spy = jest.spyOn(ddp, "call");
-  //     Job.setDDP(ddp, "test1", Fiber);
+    // it("accepts a valid collection name and Fiber object and properly yields and runs", () => {
+    //   const spy = jest.spyOn(ddp, "call");
+    //   Job.setDDP(ddp, "test1", Fiber);
 
-  //     const fib = Fiber(() => Job._ddp_apply.test1("test", []));
-  //     fib.run();
+    //   const fib = Fiber(() => Job._ddp_apply.test1("test", []));
+    //   fib.run();
 
-  //     expect(spy).toHaveBeenCalledTimes(1);
-  //     spy.mockClear();
-  //   });
+    //   expect(spy).toHaveBeenCalledTimes(1);
+    //   spy.mockClear();
+    // });
 
-  //   // it("accepts a default collection name and valid Fiber object and properly yields and runs", () => {
-  //   //   const spy = jest.spyOn(ddp, "call");
-  //   //   Job.setDDP(ddp, Fiber);
+    // it("accepts a default collection name and valid Fiber object and properly yields and runs", () => {
+    //   const spy = jest.spyOn(ddp, "call");
+    //   Job.setDDP(ddp, Fiber);
 
-  //   //   const fib = Fiber(() => Job._ddp_apply("test", []));
-  //   //   fib.run();
-  //   //   expect(spy).toHaveBeenCalledTimes(1);
-  //   //   spy.mockClear();
+    //   const fib = Fiber(() => Job._ddp_apply("test", []));
+    //   fib.run();
+    //   expect(spy).toHaveBeenCalledTimes(1);
+    //   spy.mockClear();
+    // });
 
-  //   // });
+    it("properly returns values from method calls", () => (
+      new Promise((resolve) => {
+        Job.setDDP(ddp, Fiber);
 
-  //   it("properly returns values from method calls", () => (
-  //     new Promise((resolve) => {
-  //       Job.setDDP(ddp, Fiber);
+        const fib = Fiber(() => {
+          expect(Job._ddp_apply("root_true", [])).toBeTruthy();
+          expect(Job._ddp_apply("root_false", [])).toBeFalsy();
+          expect(Job._ddp_apply("root_param", [["a", 1, null]])).toEqual(["a", 1, null]);
+          resolve();
+        });
 
-  //       const fib = Fiber(() => {
-  //         expect(Job._ddp_apply("root_true", [])).toBeTruthy();
-  //         expect(Job._ddp_apply("root_false", [])).toBeFalsy();
-  //         // expect(Job._ddp_apply("root_param", [["a", 1, null]])).toEqual(["a", 1, null]);
-  //         resolve();
-  //       });
+        fib.run();
+      })
+    ));
 
-  //       fib.run();
-  //     })
-  //   ));
+    it("properly propagates thrown errors within a Fiber", () => (
+      new Promise((resolve) => {
+        Job.setDDP(ddp, Fiber);
 
-  //   it("properly propagates thrown errors within a Fiber", () => (
-  //     new Promise((resolve) => {
-  //       Job.setDDP(ddp, Fiber);
+        const fib = Fiber(() => {
+          expect(() => Job._ddp_apply("root_error", [])).toThrow(/Method failed/);
+          expect(() => Job._ddp_apply("bad_method", [])).toThrow(/Bad method in call/);
+          resolve();
+        });
 
-  //       const fib = Fiber(() => {
-  //         expect(() => Job._ddp_apply("root_error", [])).toThrow(/Method failed/);
-  //         expect(() => Job._ddp_apply("bad_method", [])).toThrow(/Bad method in call/);
-  //         resolve();
-  //       });
+        fib.run();
+      })
+    ));
 
-  //       fib.run();
-  //     })
-  //   ));
-
-  //   afterEach(() => {
-  //     Job._ddp_apply = undefined;
-  //   });
-  // });
+    afterEach(() => {
+      // eslint-disable-next-line camelcase
+      Job._ddp_apply = undefined;
+    });
+  });
 
   describe("private function", () => {
     // Note! These are internal helper functions, NOT part of the external API!
