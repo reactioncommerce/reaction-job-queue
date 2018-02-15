@@ -1424,85 +1424,97 @@ describe("Job", () => {
         });
       });
 
-  //     return describe("job control operation", function () {
+      describe("job control operation", () => {
+        const makeJobControl = (op, method) => describe(op, () => {
+          beforeAll(() => {
+            originalDDPApply = Job._ddp_apply;
+            // eslint-disable-next-line camelcase
+            Job._ddp_apply = jest.fn(makeDdpStub((name, params) => {
+              let res;
+              if (name !== `root_${method}`) {
+                throw new Error(`Bad method name: ${name}`);
+              }
+              const id = params[0];
+              if (id === "thisId") {
+                res = true;
+              } else {
+                res = false;
+              }
+              return [null, res];
+            }));
+          });
 
-  //       const makeJobControl = (op, method) => describe(op, function () {
+          it("should properly invoke the DDP method", () => {
+            expect(typeof job[op]).toBe("function");
+            doc._id = "thisId";
+            const res = job[op]();
+            expect(res).toBeTruthy();
+          });
 
-  //         before(() => sinon.stub(Job, "_ddp_apply").callsFake(makeDdpStub(function (name, params) {
-  //           let res;
-  //           if (name !== `root_${method}`) {
-  //             throw new Error(`Bad method name: ${name}`);
-  //           }
-  //           const id = params[0];
-  //           if (id === "thisId") {
-  //             res = true;
-  //           } else {
-  //             res = false;
-  //           }
-  //           return [null, res];
-  //         })));
+          it("should return false if the id is not on the server", () => {
+            expect(typeof job[op]).toBe("function");
+            doc._id = "badId";
+            const res = job[op]();
+            expect(res).toBeFalsy();
+          });
 
-  //         it("should properly invoke the DDP method", function () {
-  //           assert.isFunction(job[op]);
-  //           doc._id = "thisId";
-  //           const res = job[op]();
-  //           return assert.isTrue(res);
-  //         });
+          it("should work with a callback", () => {
+            expect(typeof job[op]).toBe("function");
+            doc._id = "thisId";
+            return new Promise((resolve) => {
+              job[op]((err, res) => {
+                expect(res).toBeTruthy();
+                resolve();
+              });
+            });
+          });
 
-  //         it("should return false if the id is not on the server", function () {
-  //           assert.isFunction(job[op]);
-  //           doc._id = "badId";
-  //           const res = job[op]();
-  //           return assert.isFalse(res);
-  //         });
+          if (["pause", "resume"].includes(op)) {
+            it("should alter local state when called on an unsaved job", () => {
+              const bad = "badStatus";
+              doc.status = bad;
+              const res = job[op]();
+              expect(res).toBe(job);
+              expect(doc.status).not.toBe(bad);
+            });
 
-  //         it("should work with a callback", function (done) {
-  //           let res;
-  //           assert.isFunction(job[op]);
-  //           doc._id = "thisId";
-  //           return res = job[op](function (err, res) {
-  //             assert.isTrue(res);
-  //             return done();
-  //           });
-  //         });
+            it("should alter local state when called on an unsaved job with callback", () => {
+              const bad = "badStatus";
+              doc.status = bad;
+              return new Promise((resolve) => {
+                job[op]((err, res) => {
+                  expect(res).toBeTruthy();
+                  expect(doc.status).not.toBe(bad);
+                  expect(res).toBeTruthy();
+                  resolve();
+                });
+              });
+            });
+          } else {
+            it("should throw when called on an unsaved job", () => {
+              expect(() => job[op]()).toThrow(/on an unsaved job/);
+            });
+          }
 
-  //         if (["pause", "resume"].includes(op)) {
-  //           it("should alter local state when called on an unsaved job", function () {
-  //             const bad = "badStatus";
-  //             doc.status = bad;
-  //             const res = job[op]();
-  //             assert.equal(res, job);
-  //             return assert.notEqual(doc.status, bad);
-  //           });
+          afterEach(() => {
+            Job._ddp_apply.mockClear();
+          });
 
-  //           it("should alter local state when called on an unsaved job with callback", function (done) {
-  //             let res;
-  //             const bad = "badStatus";
-  //             doc.status = bad;
-  //             return res = job[op](function (err, res) {
-  //               assert.isTrue(res);
-  //               assert.notEqual(doc.status, bad);
-  //               return done();
-  //             });
-  //           });
-  //         } else {
-  //           it("should throw when called on an unsaved job", () => assert.throw((() => job[op]()), /on an unsaved job/));
-  //         }
+          afterAll(() => {
+            // eslint-disable-next-line camelcase
+            Job._ddp_apply = originalDDPApply;
+          });
+        });
 
-  //         afterEach(() => Job._ddp_apply.resetHistory());
-
-  //         return after(() => Job._ddp_apply.restore());
-  //       });
-
-  //       makeJobControl("pause", "jobPause");
-  //       makeJobControl("resume", "jobResume");
-  //       makeJobControl("ready", "jobReady");
-  //       makeJobControl("cancel", "jobCancel");
-  //       makeJobControl("restart", "jobRestart");
-  //       makeJobControl("rerun", "jobRerun");
-  //       return makeJobControl("remove", "jobRemove");
-  //     });
-  //   });
+        makeJobControl("pause", "jobPause");
+        makeJobControl("resume", "jobResume");
+        makeJobControl("ready", "jobReady");
+        makeJobControl("cancel", "jobCancel");
+        makeJobControl("restart", "jobRestart");
+        makeJobControl("rerun", "jobRerun");
+        makeJobControl("remove", "jobRemove");
+      });
+    // });
 
   //   return describe("class method", function () {
 
