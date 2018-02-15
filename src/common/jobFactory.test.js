@@ -1580,27 +1580,26 @@ describe("Job", () => {
         });
       });
 
-      // describe("makeJob", () => {
+      describe("makeJob", () => {
+        const jobDoc = () => {
+          const j = new Job("root", "work", {})._doc;
+          j._id = {
+            _str: "skljfdf9s0ujfsdfl3"
+          };
+          return j;
+        };
 
-      //   const jobDoc = () => {
-      //     const j = new Job("root", "work", {})._doc;
-      //     j._id = {
-      //       _str: "skljfdf9s0ujfsdfl3"
-      //     };
-      //     return j;
-      //   };
+        it("should return a valid job instance when called with a valid job document", () => {
+          const res = new Job("root", jobDoc());
+          expect(res).toBeInstanceOf(Job);
+        });
 
-      //   it("should return a valid job instance when called with a valid job document", () => {
-      //     const res = new Job("root", jobDoc());
-      //     return assert.instanceOf(res, Job);
-      //   });
-
-      //   return it("should throw when passed invalid params", () => {
-      //     assert.throw((() => new Job()), /bad parameter/);
-      //     assert.throw((() => new Job(5, jobDoc())), /bad parameter/);
-      //     return assert.throw((() => new Job("work", {})), /bad parameter/);
-      //   });
-      // });
+        return it("should throw when passed invalid params", () => {
+          expect(() => new Job()).toThrow(/bad parameter/);
+          expect(() => new Job(5, jobDoc())).toThrow(/bad parameter/);
+          expect(() => new Job("work", {})).toThrow(/bad parameter/);
+        });
+      });
 
       // describe("get Job(s) by ID", () => {
 
