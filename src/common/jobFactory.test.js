@@ -895,7 +895,6 @@ describe("Job", () => {
       });
 
       describe(".save()", () => {
-
         beforeAll(() => {
           originalDDPApply = Job._ddp_apply;
           // eslint-disable-next-line camelcase
@@ -951,7 +950,6 @@ describe("Job", () => {
       });
 
       describe(".refresh()", () => {
-
         beforeAll(() => {
           originalDDPApply = Job._ddp_apply;
           // eslint-disable-next-line camelcase
