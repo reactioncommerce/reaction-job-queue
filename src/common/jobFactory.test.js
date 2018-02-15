@@ -1751,34 +1751,41 @@ describe("Job", () => {
         makeMulti("removeJobs", "jobRemove");
       });
 
-      // return describe("control method", () => {
+      describe("control method", () => {
+        const makeControl = (op) => describe(op, () => {
+          beforeAll(() => {
+            originalDDPApply = Job._ddp_apply;
+            // eslint-disable-next-line camelcase
+            Job._ddp_apply = jest.fn(makeDdpStub((name) => {
+              if (name !== `root_${op}`) {
+                throw new Error(`Bad method name: ${name}`);
+              }
+              return [null, true];
+            }));
+          });
 
-      //   const makeControl = op => describe(op, () => {
+          it("should return a boolean", () => {
+            expect(typeof Job[op]).toBe("function");
+            const res = Job[op]("root");
+            expect(Job._ddp_apply).toHaveBeenCalledTimes(1);
+            expect(typeof res).toBe("boolean");
+          });
 
-      //     before(() => sinon.stub(Job, "_ddp_apply").callsFake(makeDdpStub(function (name, params) {
-      //       if (name !== `root_${op}`) {
-      //         throw new Error(`Bad method name: ${name}`);
-      //       }
-      //       return [null, true];
-      //     })));
+          afterEach(() => {
+            Job._ddp_apply.mockClear();
+          });
 
-      //     it("should return a boolean", () => {
-      //       assert.isFunction(Job[op]);
-      //       const res = Job[op]("root");
-      //       assert(Job._ddp_apply.calledOnce, `${op} method called more than once`);
-      //       return assert.isBoolean(res);
-      //     });
+          afterAll(() => {
+            // eslint-disable-next-line camelcase
+            Job._ddp_apply = originalDDPApply;
+          });
+        });
 
-      //     afterEach(() => Job._ddp_apply.resetHistory());
-
-      //     return after(() => Job._ddp_apply.restore());
-      //   });
-
-        // makeControl("startJobs");
-        // makeControl("stopJobs");
-        // makeControl("startJobServer");
-        // return makeControl("shutdownJobServer");
-      // });
+        makeControl("startJobs");
+        makeControl("stopJobs");
+        makeControl("startJobServer");
+        makeControl("shutdownJobServer");
+      });
     });
   });
 });
