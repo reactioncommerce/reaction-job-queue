@@ -1261,12 +1261,12 @@ describe("Job", () => {
             }
             const id = params[0];
             const runId = params[1];
-            const result = params[2];
+            const result = params[2];            
             const options = params[3];
             if ((id === "thisId") && (runId === "thatId") && (typeof result === "object")) {
               res = result;
-            } else if (options.resultId) {
-              res = result.resultId;
+            } else if (options.repeatId) {
+              res = result.repeatId;
             } else {
               res = false;
             }
@@ -1321,12 +1321,14 @@ describe("Job", () => {
           expect(() => job.done()).toThrow(/an unsaved or non-running job/);
         });
 
-        it.skip("should properly pass the repeatId option", () => {
+        it("should properly pass the repeatId option", () => {
           doc._id = "someId";
           doc.runId = "otherId";
           return new Promise((resolve) => {
             job.done({
               repeatId: "testID"
+            }, {
+              repeatId: true
             }, (err, res) => {
               expect(res).toBe("testID");
               resolve();
