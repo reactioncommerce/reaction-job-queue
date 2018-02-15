@@ -53,7 +53,7 @@ jobs:
 
       - run: npm run build
 
-      - run: cd dist && npx semantic-release
+      - run: cd build && npx semantic-release
 
 workflows:
   version: 2
