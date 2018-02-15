@@ -2,14 +2,13 @@
   "name": "@reactioncommerce/job-queue",
   "version": "0.0.0-development",
   "description": "Reaction job queue collection",
-  "main": "./dist/node/index.js",
-  "browser": "./dist/browser/index.js",
-  "directories": {
-    "dist": "dist"
-  },
+  "main": "node/index.js",
+  "browser": "browser/index.js",
   "scripts": {
-    "prebuild": "rimraf dist",
-    "build": "cross-env NODE_ENV=production babel ./src --ignore *.test.js --out-dir ./dist",
+    "prebuild": "rimraf dist && mkdir dist",
+    "build:copy": "cp package.json dist && cp LICENSE dist && cp README.md dist",
+    "build:src": "cross-env NODE_ENV=production babel ./src --ignore *.test.js --out-dir ./dist",
+    "build": "npm run build:copy && npm run build:src",
     "watch": "watch 'npm run build' src",
     "lint": "eslint ./src",
     "test": "jest"

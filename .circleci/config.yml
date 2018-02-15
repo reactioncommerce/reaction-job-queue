@@ -51,7 +51,7 @@ jobs:
           # fallback to using the latest cache if no exact match is found
           - v1-dependencies-
 
-      - run: npx semantic-release
+      - run: cd dist && npx semantic-release
 
 workflows:
   version: 2
