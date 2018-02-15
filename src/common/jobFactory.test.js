@@ -1514,259 +1514,262 @@ describe("Job", () => {
         makeJobControl("rerun", "jobRerun");
         makeJobControl("remove", "jobRemove");
       });
-    // });
+    });
 
-  //   return describe("class method", function () {
+    describe("class method", () => {
+      describe("getWork", () => {
+        beforeAll(() => {
+          originalDDPApply = Job._ddp_apply;
+          // eslint-disable-next-line camelcase
+          Job._ddp_apply = jest.fn(makeDdpStub((name, params) => {
+            if (name !== "root_getWork") {
+              throw new Error("Bad method name");
+            }
+            const type = params[0][0];
+            const max = (params[1] && params[1].maxJobs) || 1;
+            const res = (() => {
+              switch (type) {
+                case "work":
+                  return (__range__(1, max, true).map((i) => new Job("root", type, { [i]: 1 })._doc));
+                case "nowork":
+                  return [];
+                default:
+                  break;
+              }
+            })();
+            return [null, res];
+          }));
+        });
 
-  //     describe("getWork", function () {
+        it("should make a DDP method call and return a Job by default without callback", () => {
+          const res = Job.getWork("root", "work", {});
+          expect(res).toBeInstanceOf(Job);
+        });
 
-  //       before(() => sinon.stub(Job, "_ddp_apply").callsFake(makeDdpStub(function (name, params) {
-  //         if (name !== "root_getWork") {
-  //           throw new Error("Bad method name");
-  //         }
-  //         const type = params[0][0];
-  //         const max = (params[1] != null
-  //           ? params[1].maxJobs
-  //           : undefined) != null
-  //           ? (params[1] != null
-  //             ? params[1].maxJobs
-  //             : undefined)
-  //           : 1;
-  //         const res = (() => {
-  //           switch (type) {
-  //             case "work":
-  //               return (__range__(1, max, true).map((i) => Job("root", type, { i: 1 })._doc));
-  //             case "nowork":
-  //               return [];
-  //           }
-  //         })();
-  //         return [null, res];
-  //       })));
+        it("should return undefined when no work is available without callback", () => {
+          const res = Job.getWork("root", "nowork", {});
+          expect(res).toBeUndefined();
+        });
 
-  //       it("should make a DDP method call and return a Job by default without callback", function () {
-  //         const res = Job.getWork("root", "work", {});
-  //         return assert.instanceOf(res, Job);
-  //       });
+        it("should return an array of Jobs when options.maxJobs > 1 without callback", () => {
+          const res = Job.getWork("root", "work", { maxJobs: 2 });
+          expect(Array.isArray(res)).toBeTruthy();
+          expect(res).toHaveLength(2);
+          expect(res[0]).toBeInstanceOf(Job);
+        });
 
-  //       it("should return undefined when no work is available without callback", function () {
-  //         const res = Job.getWork("root", "nowork", {});
-  //         return assert.isUndefined(res);
-  //       });
+        it("should return an empty array when options.maxJobs > 1 and there is no work without callback", () => {
+          const res = Job.getWork("root", "nowork", { maxJobs: 2 });
+          expect(Array.isArray(res)).toBeTruthy();
+          expect(res).toHaveLength(0);
+        });
 
-  //       it("should return an array of Jobs when options.maxJobs > 1 without callback", function () {
-  //         const res = Job.getWork("root", "work", { maxJobs: 2 });
-  //         assert.isArray(res);
-  //         assert.lengthOf(res, 2);
-  //         return assert.instanceOf(res[0], Job);
-  //       });
+        it("should throw when given on invalid value for the timeout option", () => {
+          expect(() => Job.getWork("root", "nowork", { workTimeout: "Bad" })).toThrow(/must be a positive integer/);
+          expect(() => Job.getWork("root", "nowork", { workTimeout: 0 })).toThrow(/must be a positive integer/);
+          expect(() => Job.getWork("root", "nowork", { workTimeout: -1 })).toThrow(/must be a positive integer/);
+        });
 
-  //       it("should return an empty array when options.maxJobs > 1 and there is no work without callback", function () {
-  //         const res = Job.getWork("root", "nowork", { maxJobs: 2 });
-  //         assert.isArray(res);
-  //         return assert.lengthOf(res, 0);
-  //       });
+        afterEach(() => {
+          Job._ddp_apply.mockClear();
+        });
 
-  //       it("should throw when given on invalid value for the timeout option", function () {
-  //         assert.throw((() => Job.getWork("root", "nowork", { workTimeout: "Bad" })), /must be a positive integer/);
-  //         assert.throw((() => Job.getWork("root", "nowork", { workTimeout: 0 })), /must be a positive integer/);
-  //         return assert.throw((() => Job.getWork("root", "nowork", { workTimeout: -1 })), /must be a positive integer/);
-  //       });
+        afterAll(() => {
+          // eslint-disable-next-line camelcase
+          Job._ddp_apply = originalDDPApply;
+        });
+      });
 
-  //       afterEach(() => Job._ddp_apply.resetHistory());
+      // describe("makeJob", () => {
 
-  //       return after(() => Job._ddp_apply.restore());
-  //     });
+      //   const jobDoc = () => {
+      //     const j = new Job("root", "work", {})._doc;
+      //     j._id = {
+      //       _str: "skljfdf9s0ujfsdfl3"
+      //     };
+      //     return j;
+      //   };
 
-  //     describe("makeJob", function () {
+      //   it("should return a valid job instance when called with a valid job document", () => {
+      //     const res = new Job("root", jobDoc());
+      //     return assert.instanceOf(res, Job);
+      //   });
 
-  //       const jobDoc = function () {
-  //         const j = new Job("root", "work", {})._doc;
-  //         j._id = {
-  //           _str: "skljfdf9s0ujfsdfl3"
-  //         };
-  //         return j;
-  //       };
+      //   return it("should throw when passed invalid params", () => {
+      //     assert.throw((() => new Job()), /bad parameter/);
+      //     assert.throw((() => new Job(5, jobDoc())), /bad parameter/);
+      //     return assert.throw((() => new Job("work", {})), /bad parameter/);
+      //   });
+      // });
 
-  //       it("should return a valid job instance when called with a valid job document", function () {
-  //         const res = new Job("root", jobDoc());
-  //         return assert.instanceOf(res, Job);
-  //       });
+      // describe("get Job(s) by ID", () => {
 
-  //       return it("should throw when passed invalid params", function () {
-  //         assert.throw((() => new Job()), /bad parameter/);
-  //         assert.throw((() => new Job(5, jobDoc())), /bad parameter/);
-  //         return assert.throw((() => new Job("work", {})), /bad parameter/);
-  //       });
-  //     });
+      //   const getJobStub = function (name, params) {
+      //     let res;
+      //     let j;
+      //     if (name !== "root_getJob") {
+      //       throw new Error("Bad method name");
+      //     }
+      //     const ids = params[0];
 
-  //     describe("get Job(s) by ID", function () {
+      //     const one = function (id) {
+      //       j = (() => {
+      //         switch (id) {
+      //           case "goodID":
+      //             return Job("root", "work", { i: 1 })._doc;
+      //           default:
+      //             return undefined;
+      //         }
+      //       })();
+      //       return j;
+      //     };
 
-  //       const getJobStub = function (name, params) {
-  //         let res;
-  //         let j;
-  //         if (name !== "root_getJob") {
-  //           throw new Error("Bad method name");
-  //         }
-  //         const ids = params[0];
+      //     if (ids instanceof Array) {
+      //       res = ((() => {
+      //         const result = [];
+      //         for (j of Array.from(ids)) {
+      //           if (j === "goodID") {
+      //             result.push(one(j));
+      //           }
+      //         }
+      //         return result;
+      //       })());
+      //     } else {
+      //       res = one(ids);
+      //     }
 
-  //         const one = function (id) {
-  //           j = (() => {
-  //             switch (id) {
-  //               case "goodID":
-  //                 return Job("root", "work", { i: 1 })._doc;
-  //               default:
-  //                 return undefined;
-  //             }
-  //           })();
-  //           return j;
-  //         };
+      //     return [null, res];
+      //   };
 
-  //         if (ids instanceof Array) {
-  //           res = ((() => {
-  //             const result = [];
-  //             for (j of Array.from(ids)) {
-  //               if (j === "goodID") {
-  //                 result.push(one(j));
-  //               }
-  //             }
-  //             return result;
-  //           })());
-  //         } else {
-  //           res = one(ids);
-  //         }
+      //   describe("getJob", () => {
 
-  //         return [null, res];
-  //       };
+      //     before(() => sinon.stub(Job, "_ddp_apply").callsFake(makeDdpStub(getJobStub)));
 
-  //       describe("getJob", function () {
+      //     it("should return a valid job instance when called with a good id", () => {
+      //       const res = Job.getJob("root", "goodID");
+      //       return assert.instanceOf(res, Job);
+      //     });
 
-  //         before(() => sinon.stub(Job, "_ddp_apply").callsFake(makeDdpStub(getJobStub)));
+      //     it("should return undefined when called with a bad id", () => {
+      //       const res = Job.getJob("root", "badID");
+      //       return assert.isUndefined(res);
+      //     });
 
-  //         it("should return a valid job instance when called with a good id", function () {
-  //           const res = Job.getJob("root", "goodID");
-  //           return assert.instanceOf(res, Job);
-  //         });
+      //     afterEach(() => Job._ddp_apply.resetHistory());
 
-  //         it("should return undefined when called with a bad id", function () {
-  //           const res = Job.getJob("root", "badID");
-  //           return assert.isUndefined(res);
-  //         });
+      //     return after(() => Job._ddp_apply.restore());
+      //   });
 
-  //         afterEach(() => Job._ddp_apply.resetHistory());
+      //   return describe("getJobs", () => {
 
-  //         return after(() => Job._ddp_apply.restore());
-  //       });
+      //     before(() => sinon.stub(Job, "_ddp_apply").callsFake(makeDdpStub(getJobStub)));
 
-  //       return describe("getJobs", function () {
+      //     it("should return valid job instances for good IDs only", () => {
+      //       const res = Job.getJobs("root", ["goodID", "badID", "goodID"]);
+      //       assert(Job._ddp_apply.calledOnce, "getJob method called more than once");
+      //       assert.isArray(res);
+      //       assert.lengthOf(res, 2);
+      //       assert.instanceOf(res[0], Job);
+      //       return assert.instanceOf(res[1], Job);
+      //     });
 
-  //         before(() => sinon.stub(Job, "_ddp_apply").callsFake(makeDdpStub(getJobStub)));
+      //     it("should return an empty array for all bad IDs", () => {
+      //       const res = Job.getJobs("root", ["badID", "badID", "badID"]);
+      //       assert(Job._ddp_apply.calledOnce, "getJob method called more than once");
+      //       assert.isArray(res);
+      //       return assert.lengthOf(res, 0);
+      //     });
 
-  //         it("should return valid job instances for good IDs only", function () {
-  //           const res = Job.getJobs("root", ["goodID", "badID", "goodID"]);
-  //           assert(Job._ddp_apply.calledOnce, "getJob method called more than once");
-  //           assert.isArray(res);
-  //           assert.lengthOf(res, 2);
-  //           assert.instanceOf(res[0], Job);
-  //           return assert.instanceOf(res[1], Job);
-  //         });
+      //     afterEach(() => Job._ddp_apply.resetHistory());
 
-  //         it("should return an empty array for all bad IDs", function () {
-  //           const res = Job.getJobs("root", ["badID", "badID", "badID"]);
-  //           assert(Job._ddp_apply.calledOnce, "getJob method called more than once");
-  //           assert.isArray(res);
-  //           return assert.lengthOf(res, 0);
-  //         });
+      //     return after(() => Job._ddp_apply.restore());
+      //   });
+      // });
 
-  //         afterEach(() => Job._ddp_apply.resetHistory());
+      // describe("multijob operation", () => {
 
-  //         return after(() => Job._ddp_apply.restore());
-  //       });
-  //     });
+      //   const makeMulti = (op, method) => describe(op, () => {
 
-  //     describe("multijob operation", function () {
+      //     before(() => sinon.stub(Job, "_ddp_apply").callsFake(makeDdpStub(function (name, params) {
+      //       if (name !== `root_${method}`) {
+      //         throw new Error(`Bad method name: ${name}`);
+      //       }
+      //       const ids = params[0];
+      //       return [
+      //         null, ids.indexOf("goodID") !== -1
+      //       ];
+      //     })));
 
-  //       const makeMulti = (op, method) => describe(op, function () {
+      //     it("should return true if there are any good IDs", () => {
+      //       assert.isFunction(Job[op]);
+      //       const res = Job[op]("root", ["goodID", "badID", "goodID"]);
+      //       assert(Job._ddp_apply.calledOnce, `${op} method called more than once`);
+      //       assert.isBoolean(res);
+      //       return assert.isTrue(res);
+      //     });
 
-  //         before(() => sinon.stub(Job, "_ddp_apply").callsFake(makeDdpStub(function (name, params) {
-  //           if (name !== `root_${method}`) {
-  //             throw new Error(`Bad method name: ${name}`);
-  //           }
-  //           const ids = params[0];
-  //           return [
-  //             null, ids.indexOf("goodID") !== -1
-  //           ];
-  //         })));
+      //     it("should return false if there are all bad IDs", () => {
+      //       assert.isFunction(Job[op]);
+      //       const res = Job[op]("root", ["badID", "badID"]);
+      //       assert(Job._ddp_apply.calledOnce, `${op} method called more than once`);
+      //       assert.isBoolean(res);
+      //       return assert.isFalse(res);
+      //     });
 
-  //         it("should return true if there are any good IDs", function () {
-  //           assert.isFunction(Job[op]);
-  //           const res = Job[op]("root", ["goodID", "badID", "goodID"]);
-  //           assert(Job._ddp_apply.calledOnce, `${op} method called more than once`);
-  //           assert.isBoolean(res);
-  //           return assert.isTrue(res);
-  //         });
+      //     afterEach(() => Job._ddp_apply.resetHistory());
 
-  //         it("should return false if there are all bad IDs", function () {
-  //           assert.isFunction(Job[op]);
-  //           const res = Job[op]("root", ["badID", "badID"]);
-  //           assert(Job._ddp_apply.calledOnce, `${op} method called more than once`);
-  //           assert.isBoolean(res);
-  //           return assert.isFalse(res);
-  //         });
+      //     return after(() => Job._ddp_apply.restore());
+      //   });
 
-  //         afterEach(() => Job._ddp_apply.resetHistory());
+      //   makeMulti("pauseJobs", "jobPause");
+      //   makeMulti("resumeJobs", "jobResume");
+      //   makeMulti("cancelJobs", "jobCancel");
+      //   makeMulti("restartJobs", "jobRestart");
+      //   return makeMulti("removeJobs", "jobRemove");
+      // });
 
-  //         return after(() => Job._ddp_apply.restore());
-  //       });
+      // return describe("control method", () => {
 
-  //       makeMulti("pauseJobs", "jobPause");
-  //       makeMulti("resumeJobs", "jobResume");
-  //       makeMulti("cancelJobs", "jobCancel");
-  //       makeMulti("restartJobs", "jobRestart");
-  //       return makeMulti("removeJobs", "jobRemove");
-  //     });
+      //   const makeControl = op => describe(op, () => {
 
-  //     return describe("control method", function () {
+      //     before(() => sinon.stub(Job, "_ddp_apply").callsFake(makeDdpStub(function (name, params) {
+      //       if (name !== `root_${op}`) {
+      //         throw new Error(`Bad method name: ${name}`);
+      //       }
+      //       return [null, true];
+      //     })));
 
-  //       const makeControl = op => describe(op, function () {
+      //     it("should return a boolean", () => {
+      //       assert.isFunction(Job[op]);
+      //       const res = Job[op]("root");
+      //       assert(Job._ddp_apply.calledOnce, `${op} method called more than once`);
+      //       return assert.isBoolean(res);
+      //     });
 
-  //         before(() => sinon.stub(Job, "_ddp_apply").callsFake(makeDdpStub(function (name, params) {
-  //           if (name !== `root_${op}`) {
-  //             throw new Error(`Bad method name: ${name}`);
-  //           }
-  //           return [null, true];
-  //         })));
+      //     afterEach(() => Job._ddp_apply.resetHistory());
 
-  //         it("should return a boolean", function () {
-  //           assert.isFunction(Job[op]);
-  //           const res = Job[op]("root");
-  //           assert(Job._ddp_apply.calledOnce, `${op} method called more than once`);
-  //           return assert.isBoolean(res);
-  //         });
+      //     return after(() => Job._ddp_apply.restore());
+      //   });
 
-  //         afterEach(() => Job._ddp_apply.resetHistory());
-
-  //         return after(() => Job._ddp_apply.restore());
-  //       });
-
-  //       makeControl("startJobs");
-  //       makeControl("stopJobs");
-  //       makeControl("startJobServer");
-  //       return makeControl("shutdownJobServer");
-  //     });
+        // makeControl("startJobs");
+        // makeControl("stopJobs");
+        // makeControl("startJobServer");
+        // return makeControl("shutdownJobServer");
+      // });
     });
   });
 });
 
 // //##########################################
 
-// describe("JobQueue", function () {
+// describe("JobQueue", () => {
 
 //   const ddp = new DDP();
 //   let failCalls = 0;
 //   let doneCalls = 0;
 //   let numJobs = 5;
 
-//   before(function () {
+//   before(() => {
 //     Job._ddp_apply = undefined;
 //     Job.setDDP(ddp);
 //     return sinon.stub(Job, "_ddp_apply").callsFake(makeDdpStub(function (name, params) {
@@ -1832,7 +1835,7 @@ describe("Job", () => {
 //     }));
 //   });
 
-//   beforeEach(function () {
+//   beforeEach(() => {
 //     failCalls = 0;
 //     doneCalls = 0;
 //     return numJobs = 5;
@@ -1894,7 +1897,7 @@ describe("Job", () => {
 //     assert.instanceOf(q, Job.processJobs);
 //     return q.shutdown({
 //       quiet: true
-//     }, function () {
+//     }, () => {
 //       assert.equal(doneCalls, 0);
 //       assert.equal(failCalls, 0);
 //       return done();
@@ -1913,7 +1916,7 @@ describe("Job", () => {
 //     assert.instanceOf(q, Job.processJobs);
 //     return q.shutdown({
 //       quiet: true
-//     }, function () {
+//     }, () => {
 //       assert.equal(doneCalls, 0);
 //       assert.equal(failCalls, 0);
 //       return done();
@@ -1949,7 +1952,7 @@ describe("Job", () => {
 //     revert();
 //     return q.shutdown({
 //       quiet: true
-//     }, function () {
+//     }, () => {
 //       assert.equal(doneCalls, 0);
 //       assert.equal(failCalls, 0);
 //       return done();
@@ -1964,7 +1967,7 @@ describe("Job", () => {
 //       job.done();
 //       q.shutdown({
 //         quiet: true
-//       }, function () {
+//       }, () => {
 //         assert.equal(doneCalls, 1);
 //         assert.equal(failCalls, 0);
 //         return done();
@@ -1980,7 +1983,7 @@ describe("Job", () => {
 //       job.done();
 //       q.shutdown({
 //         quiet: true
-//       }, function () {
+//       }, () => {
 //         assert.equal(doneCalls, 1);
 //         assert.equal(failCalls, 0);
 //         return done();
@@ -2001,14 +2004,14 @@ describe("Job", () => {
 //       job.done();
 //       q.shutdown({
 //         quiet: true
-//       }, function () {
+//       }, () => {
 //         assert.equal(doneCalls, 1);
 //         assert.equal(failCalls, 0);
 //         return done();
 //       });
 //       return cb(null);
 //     }).pause();
-//     return setTimeout(function () {
+//     return setTimeout(() => {
 //       flag = true;
 //       return q.resume();
 //     }, 20);
@@ -2032,7 +2035,7 @@ describe("Job", () => {
 //       if (count === 0) {
 //         q.shutdown({
 //           quiet: true
-//         }, function () {
+//         }, () => {
 //           assert.equal(doneCalls, 5, "doneCalls is incorrect");
 //           assert.equal(failCalls, 0, "failCalls is incorrect");
 //           return done();
@@ -2050,7 +2053,7 @@ describe("Job", () => {
 //       concurrency: 5
 //     }, function (job, cb) {
 //       count++;
-//       return setTimeout(function () {
+//       return setTimeout(() => {
 //         assert.equal(q.length(), 0);
 //         assert.equal(q.running(), count);
 //         count--;
@@ -2058,7 +2061,7 @@ describe("Job", () => {
 //         if (!(count > 0)) {
 //           q.shutdown({
 //             quiet: true
-//           }, function () {
+//           }, () => {
 //             assert.equal(doneCalls, 5);
 //             assert.equal(failCalls, 0);
 //             return done();
@@ -2083,7 +2086,7 @@ describe("Job", () => {
 //       }
 //       q.shutdown({
 //         quiet: true
-//       }, function () {
+//       }, () => {
 //         assert.equal(doneCalls, 5);
 //         assert.equal(failCalls, 0);
 //         return done();
@@ -2102,7 +2105,7 @@ describe("Job", () => {
 //       concurrency: 5
 //     }, function (jobs, cb) {
 //       count += jobs.length;
-//       return setTimeout(function () {
+//       return setTimeout(() => {
 //         assert.equal(q.length(), 0);
 //         assert.equal(q.running(), count / 5);
 //         count -= jobs.length;
@@ -2112,7 +2115,7 @@ describe("Job", () => {
 //         if (!(count > 0)) {
 //           q.shutdown({
 //             quiet: true
-//           }, function () {
+//           }, () => {
 //             assert.equal(doneCalls, 25);
 //             assert.equal(failCalls, 0);
 //             return done();
@@ -2139,7 +2142,7 @@ describe("Job", () => {
 //         q.shutdown({
 //           quiet: true,
 //           level: "soft"
-//         }, function () {
+//         }, () => {
 //           assert(count === 0);
 //           assert.equal(q.length(), 0);
 //           assert.isFalse(Job._ddp_apply.calledWith("root_jobFail"));
@@ -2159,14 +2162,14 @@ describe("Job", () => {
 //       pollInterval: 100,
 //       concurrency: 2,
 //       prefetch: 3
-//     }, (job, cb) => setTimeout(function () {
+//     }, (job, cb) => setTimeout(() => {
 //       count--;
 //       job.done();
 //       if (count === 4) {
 //         q.shutdown({
 //           quiet: true,
 //           level: "normal"
-//         }, function () {
+//         }, () => {
 //           assert.equal(count, 3);
 //           assert.equal(q.length(), 0);
 //           assert.isTrue(Job._ddp_apply.calledWith("root_jobFail"));
@@ -2190,7 +2193,7 @@ describe("Job", () => {
 //       prefetch: 15
 //     }, function (jobs, cb) {
 //       count += jobs.length;
-//       return setTimeout(function () {
+//       return setTimeout(() => {
 //         assert.equal(q.running(), count / 5);
 //         count -= jobs.length;
 //         for (let j of Array.from(jobs)) {
@@ -2199,7 +2202,7 @@ describe("Job", () => {
 //         if (count === 5) {
 //           q.shutdown({
 //             quiet: true
-//           }, function () {
+//           }, () => {
 //             assert.equal(q.length(), 0, "jobs remain in task list");
 //             assert.equal(count, 0, "count is wrong value");
 //             assert.isTrue(Job._ddp_apply.calledWith("root_jobFail"));
@@ -2222,14 +2225,14 @@ describe("Job", () => {
 //       concurrency: 2,
 //       prefetch: 3
 //     }, function (job, cb) {
-//       setTimeout(function () {
+//       setTimeout(() => {
 //         count++;
 //         if (count === 1) {
 //           job.done();
 //           q.shutdown({
 //             level: "hard",
 //             quiet: true
-//           }, function () {
+//           }, () => {
 //             assert.equal(q.length(), 0);
 //             assert.equal(count, 1);
 //             assert.isTrue(Job._ddp_apply.calledWith("root_jobFail"));
@@ -2252,14 +2255,14 @@ describe("Job", () => {
 //       pollInterval: 100,
 //       concurrency: 1,
 //       prefetch: 0
-//     }, (job, cb) => setTimeout(function () {
+//     }, (job, cb) => setTimeout(() => {
 //       job.done();
 //       cb();
 //       assert.throws(cb, /callback was invoked multiple times/);
 //       return q.shutdown({
 //         level: "hard",
 //         quiet: true
-//       }, function () {
+//       }, () => {
 //         assert.equal(doneCalls, 1);
 //         assert.equal(failCalls, 0);
 //         return done();
@@ -2274,13 +2277,13 @@ describe("Job", () => {
 //       pollInterval: 100,
 //       concurrency: 1,
 //       prefetch: 0
-//     }, (job, cb) => setTimeout(function () {
-//       job.done(function () {
+//     }, (job, cb) => setTimeout(() => {
+//       job.done(() => {
 //         assert.throws(cb, /callback was invoked multiple times/);
 //         return q.shutdown({
 //           level: "hard",
 //           quiet: true
-//         }, function () {
+//         }, () => {
 //           assert.equal(doneCalls, 1);
 //           assert.equal(failCalls, 0);
 //           return done();
@@ -2297,7 +2300,7 @@ describe("Job", () => {
 //       return q.shutdown({
 //         level: "hard",
 //         quiet: true
-//       }, function () {
+//       }, () => {
 //         assert.equal(doneCalls, 0);
 //         assert.equal(failCalls, 0);
 //         return done();
@@ -2316,20 +2319,21 @@ describe("Job", () => {
 
 //   return after(() => Job._ddp_apply.restore());
 // });
-// function __range__(left, right, inclusive) {
-//   let range = [];
-//   let ascending = left < right;
-//   let end = !inclusive
-//     ? right
-//     : ascending
-//       ? right + 1
-//       : right - 1;
-//   for (let i = left; ascending
-//     ? i < end
-//     : i > end; ascending
-//       ? i++
-//       : i--) {
-//     range.push(i);
-//   }
-//   return range;
-// }
+function __range__(left, right, inclusive) {
+  const range = [];
+  const ascending = left < right;
+  let end;
+
+  if (!inclusive) {
+    end = right;
+  } else if (ascending) {
+    end = right + 1;
+  } else {
+    end = right - 1;
+  }
+
+  for (let i = left; ascending ? i < end : i > end; ascending ? i += 1 : i -= 1) {
+    range.push(i);
+  }
+  return range;
+}
