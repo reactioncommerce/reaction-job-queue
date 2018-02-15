@@ -5,7 +5,7 @@
   "main": "./dist/node/index.js",
   "browser": "./dist/browser/index.js",
   "directories": {
-    "src": "src"
+    "dist": "dist"
   },
   "scripts": {
     "prebuild": "rimraf dist",
