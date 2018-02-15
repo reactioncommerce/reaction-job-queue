@@ -55,17 +55,15 @@ class DDP {
 //   }
 }
 
-// const makeDdpStub = action => function (name, params, cb) {
-//   const [err,
-//     res] = Array.from(action(name, params));
-//   // console.dir res
-//   if (cb != null) {
-//     return process.nextTick(() => cb(err, res));
-//   } else if (err) {
-//     throw err;
-//   }
-//   return res;
-// };
+const makeDdpStub = (action) => (name, params, cb) => {
+  const [err, res] = Array.from(action(name, params));
+  if (cb) {
+    return process.nextTick(() => cb(err, res));
+  } else if (err) {
+    throw err;
+  }
+  return res;
+};
 
 describe("Job", () => {
   it("has class constants", () => {
@@ -876,827 +874,878 @@ describe("Job", () => {
       });
     });
   });
+
+  describe("communicating", () => {
+    let ddp = null;
+    let originalDDPApply;
+
+    beforeAll(() => {
+      ddp = new DDP();
+      Job.setDDP(ddp);
+      originalDDPApply = Job._ddp_apply;
+    });
+
+    describe("job status method", () => {
+      let job = null;
+      let doc = null;
+
+      beforeEach(() => {
+        job = new Job("root", "work", {});
+        doc = job._doc;
+      });
+
+      describe(".save()", () => {
+
+        beforeAll(() => {
+          originalDDPApply = Job._ddp_apply;
+          // eslint-disable-next-line camelcase
+          Job._ddp_apply = jest.fn(makeDdpStub((name, params) => {
+            let res;
+            if (name !== "root_jobSave") {
+              throw new Error("Bad method name");
+            }
+            [doc] = params;
+            const options = params[1];
+            if (options.cancelRepeats) {
+              throw new Error("cancelRepeats");
+            }
+            if (typeof doc === "object") {
+              res = "newId";
+            } else {
+              res = null;
+            }
+            return [null, res];
+          }));
+        });
+
+        it("should make valid DDP call when invoked", () => {
+          const res = job.save();
+          expect(res).toBe("newId");
+        });
+
+        it("should work with a callback", () => (
+          new Promise((resolve) => {
+            job.save((err, res) => {
+              expect(res).toBe("newId");
+              resolve();
+            });
+          })
+        ));
+
+        it("should properly pass cancelRepeats option", () => {
+          expect(() => job.save({ cancelRepeats: true })).toThrow(/cancelRepeats/);
+        });
+
+        it("should properly pass cancelRepeats option with callback", () => {
+          expect(() => job.save({ cancelRepeats: true }, () => {})).toThrow(/cancelRepeats/);
+        });
+
+        afterEach(() => {
+          Job._ddp_apply.mockClear();
+        });
+
+        afterAll(() => {
+          // eslint-disable-next-line camelcase
+          Job._ddp_apply = originalDDPApply;
+        });
+      });
+
+      describe(".refresh()", () => {
+
+        beforeAll(() => {
+          originalDDPApply = Job._ddp_apply;
+          // eslint-disable-next-line camelcase
+          Job._ddp_apply = jest.fn(makeDdpStub((name, params) => {
+            let res;
+            if (name !== "root_getJob") {
+              throw new Error("Bad method name");
+            }
+            const id = params[0];
+            const options = params[1];
+            if (options.getLog) {
+              throw new Error("getLog");
+            }
+            if (id === "thisId") {
+              res = {
+                foo: "bar"
+              };
+            } else {
+              res = null;
+            }
+            return [null, res];
+          }));
+        });
+
+        it("should make valid DDP call when invoked", () => {
+          doc._id = "thisId";
+          const res = job.refresh();
+          expect(job._doc).toEqual({ foo: "bar" });
+          expect(res).toBe(job);
+        });
+
+        it("should work with a callback", () => (
+          new Promise((resolve) => {
+            doc._id = "thisId";
+            job.refresh((err, res) => {
+              expect(job._doc).toEqual({ foo: "bar" });
+              expect(res).toBe(job);
+              resolve();
+            });
+          })
+        ));
+
+        it("shouldn't modify job when not found on server", () => {
+          doc._id = "thatId";
+          const res = job.refresh();
+          expect(res).toBeFalsy();
+          expect(job._doc).toEqual(doc);
+        });
+
+        it("should properly pass getLog option", () => {
+          doc._id = "thisId";
+          expect(() => job.refresh({ getLog: true })).toThrow(/getLog/);
+        });
+
+        it("should throw when called on an unsaved job", () => {
+          expect(() => job.refresh()).toThrow(/on an unsaved job/);
+        });
+
+        afterEach(() => {
+          Job._ddp_apply.mockClear();
+        });
+
+        afterAll(() => {
+          // eslint-disable-next-line camelcase
+          Job._ddp_apply = originalDDPApply;
+        });
+      });
+
+      describe(".log()", () => {
+        beforeAll(() => {
+          originalDDPApply = Job._ddp_apply;
+          // eslint-disable-next-line camelcase
+          Job._ddp_apply = jest.fn(makeDdpStub((name, params) => {
+            let res;
+            if (name !== "root_jobLog") {
+              throw new Error("Bad method name");
+            }
+            const id = params[0];
+            const runId = params[1];
+            const msg = params[2];
+            const level = (params[3] && params[3].level) || "gerinfo";
+            if ((id === "thisId") && (runId === "thatId") && (msg === "Hello") && Array.from(Job.jobLogLevels).includes(level)) {
+              res = level;
+            } else {
+              res = false;
+            }
+            return [null, res];
+          }));
+        });
+
+        it("should add a valid log entry to the local state when invoked before a job is saved", () => {
+          const j = job.log("Hello", { level: "success" });
+          const delay = new Date().valueOf();
+          expect(j).toBe(job);
+          const thisLog = doc.log[1]; //  [0] is the "Created" log message
+          expect(thisLog.message).toBe("Hello");
+          expect(thisLog.level).toBe("success");
+          expect(thisLog.time).toBeInstanceOf(Date);
+
+          expect(thisLog.time.valueOf()).toBeGreaterThanOrEqual(delay);
+          expect(thisLog.time.valueOf()).toBeLessThanOrEqual(delay + 1000);
+        });
+
+        it("should make valid DDP call when invoked on a saved job", () => {
+          doc._id = "thisId";
+          doc.runId = "thatId";
+          const res = job.log("Hello");
+          expect(res).toBe("info");
+        });
+
+        it("should correctly pass level option", () => {
+          doc._id = "thisId";
+          doc.runId = "thatId";
+          const res = job.log("Hello", { level: "danger" });
+          expect(res).toBe("danger");
+        });
+
+        it("should work with a callback", () => {
+          doc._id = "thisId";
+          doc.runId = "thatId";
+
+          return new Promise((resolve) => {
+            job.log("Hello", {
+              level: "success"
+            }, (err, res) => {
+              expect(res).toBe("success");
+              resolve();
+            });
+          });
+        });
+
+        it("should throw when passed an invalid message", () => {
+          doc._id = "thisId";
+          doc.runId = "thatId";
+          expect(() => job.log(43, { level: "danger" })).toThrow(/Log message must be a string/);
+        });
+
+        it("should throw when passed an invalid level", () => {
+          doc._id = "thisId";
+          doc.runId = "thatId";
+          expect(() => job.log("Hello", { level: "blargh" })).toThrow(/Log level options must be one of Job.jobLogLevels/);
+          expect(() => job.log("Hello", { level: [] })).toThrow(/Log level options must be one of Job.jobLogLevels/);
+        });
+
+        describe("echo option", () => {
+          let ogConsoleInfo = global.console.info;
+          let ogConsoleLog = global.console.log;
+          let ogConsoleWarn = global.console.warn;
+          let ogConsoleError = global.console.error;
+
+          beforeAll(() => {
+            global.console.info = jest.fn(() => {
+              throw new Error("info");
+            });
+
+            global.console.log = jest.fn(() => {
+              throw new Error("success");
+            });
+
+            global.console.warn = jest.fn(() => {
+              throw new Error("warning");
+            });
+
+            global.console.error = jest.fn(() => {
+              throw new Error("danger");
+            });
+          });
+
+          it("should echo the log to the console at the level requested", () => {
+            expect(() => job.log("Hello")).not.toThrow("echo occurred without being requested");
+            expect(() => job.log("Hello", { echo: false })).not.toThrow("echo occurred when explicitly disabled");
+            expect(() => job.log("Hello", { echo: true })).toThrow(/info/);
+            expect(() => job.log("Hello", { echo: true, level: "info" })).toThrow(/info/);
+            expect(() => job.log("Hello", { echo: true, level: "success" })).toThrow(/success/);
+            expect(() => job.log("Hello", { echo: true, level: "warning" })).toThrow(/warning/);
+            expect(() => job.log("Hello", { echo: true, level: "danger" })).toThrow(/danger/);
+          });
+
+          it("shouldn't echo the log to the console below the level requested", () => {
+            expect(() => job.log("Hello", { echo: "warning" })).not.toThrow();
+            expect(() => job.log("Hello", { echo: "warning", level: "info" })).not.toThrow();
+            expect(() => job.log("Hello", { echo: "warning", level: "success" })).not.toThrow();
+            expect(() => job.log("Hello", { echo: "warning", level: "warning" })).toThrow(/warning/);
+            expect(() => job.log("Hello", { echo: "warning", level: "danger" })).toThrow(/danger/);
+          });
+
+          afterAll(() => {
+            global.console.info = ogConsoleInfo;
+            global.console.log = ogConsoleLog;
+            global.console.warn = ogConsoleWarn;
+            global.console.error = ogConsoleError;
+          });
+        });
+
+        afterEach(() => {
+          Job._ddp_apply.mockClear();
+        });
+
+        afterAll(() => {
+          // eslint-disable-next-line camelcase
+          Job._ddp_apply = originalDDPApply;
+        });
+      });
+
+      describe(".progress()", () => {
+        beforeAll(() => {
+          originalDDPApply = Job._ddp_apply;
+          // eslint-disable-next-line camelcase
+          Job._ddp_apply = jest.fn(makeDdpStub((name, params) => {
+            let res;
+            if (name !== "root_jobProgress") {
+              throw new Error("Bad method name");
+            }
+            const id = params[0];
+            const runId = params[1];
+            const completed = params[2];
+            const total = params[3];
+            if ((id === "thisId") && (runId === "thatId") && (typeof completed === "number") && (typeof total === "number") && (completed >= 0 && completed <= total) && (total > 0)) {
+              res = (100 * completed) / total;
+            } else {
+              res = false;
+            }
+            return [null, res];
+          }));
+        });
+
+        it("should add a valid progress update to the local state when invoked before a job is saved", () => {
+          const j = job.progress(2.5, 10);
+          expect(j).toBe(job);
+          expect(doc.progress).toEqual({
+            completed: 2.5,
+            total: 10,
+            percent: 25
+          });
+        });
+
+        it("should make valid DDP call when invoked on a saved job", () => {
+          doc._id = "thisId";
+          doc.runId = "thatId";
+          const res = job.progress(5, 10);
+          expect(res).toBe(50);
+        });
+
+        it("should work with a callback", () => {
+          doc._id = "thisId";
+          doc.runId = "thatId";
+          return new Promise((resolve) => {
+            job.progress(7.5, 10, (err, res) => {
+              expect(res).toBe(75);
+              resolve();
+            });
+          });
+        });
+
+        describe("echo option", () => {
+          let ogConsoleInfo = global.console.info;
+
+          beforeAll(() => {
+            global.console.info = jest.fn(() => {
+              throw new Error("info");
+            });
+          });
+
+          it("should progress updates to the console when requested", () => {
+            expect(() => job.progress(0, 100)).not.toThrow();
+            expect(() => job.progress(0, 100, { echo: false })).not.toThrow();
+            expect(() => job.progress(0, 100, { echo: true })).toThrow(/info/);
+          });
+
+          return afterAll(() => {
+            global.console.info = ogConsoleInfo;
+          });
+        });
+
+        it("should throw when given invalid paramters", () => {
+          expect(() => job.progress(true, 100)).toThrow(/job.progress: something is wrong with progress params/);
+          expect(() => job.progress(0, "hundred")).toThrow(/job.progress: something is wrong with progress params/);
+          expect(() => job.progress(-1, 100)).toThrow(/job.progress: something is wrong with progress params/);
+          expect(() => job.progress(2, 1)).toThrow(/job.progress: something is wrong with progress params/);
+          expect(() => job.progress(0, 0)).toThrow(/job.progress: something is wrong with progress params/);
+          expect(() => job.progress(0, -1)).toThrow(/job.progress: something is wrong with progress params/);
+          expect(() => job.progress(-2, -1)).toThrow(/job.progress: something is wrong with progress params/);
+        });
+
+        afterEach(() => {
+          Job._ddp_apply.mockClear();
+        });
+
+        afterAll(() => {
+          // eslint-disable-next-line camelcase
+          Job._ddp_apply = originalDDPApply;
+        });
+      });
+
+      describe(".done()", () => {
+        beforeAll(() => {
+          originalDDPApply = Job._ddp_apply;
+          // eslint-disable-next-line camelcase
+          Job._ddp_apply = jest.fn(makeDdpStub((name, params) => {
+            let res;
+            if (name !== "root_jobDone") {
+              throw new Error("Bad method name");
+            }
+            const id = params[0];
+            const runId = params[1];
+            const result = params[2];
+            const options = params[3];
+            if ((id === "thisId") && (runId === "thatId") && (typeof result === "object")) {
+              res = result;
+            } else if (options.resultId) {
+              res = result.resultId;
+            } else {
+              res = false;
+            }
+            return [null, res];
+          }));
+        });
+
+        it("should make valid DDP call when invoked on a running job", () => {
+          doc._id = "thisId";
+          doc.runId = "thatId";
+          const res = job.done();
+          expect(res).toEqual({});
+        });
+
+        it("should properly handle a result object", () => {
+          doc._id = "thisId";
+          doc.runId = "thatId";
+          const result = {
+            foo: "bar",
+            status: 0
+          };
+          const res = job.done(result);
+          expect(res).toEqual(result);
+        });
+
+        it("should properly handle a non-object result", () => {
+          doc._id = "thisId";
+          doc.runId = "thatId";
+          const result = "Done!";
+          const res = job.done(result);
+          expect(res).toEqual({ value: result });
+        });
+
+        it("should work with a callback", () => {
+          doc._id = "thisId";
+          doc.runId = "thatId";
+
+          return new Promise((resolve) => {
+            job.done((err, res) => {
+              expect(res).toEqual({});
+              resolve();
+            });
+          });
+        });
+
+        it("should throw when called on an unsaved job", () => {
+          expect(() => job.done()).toThrow(/an unsaved or non-running job/);
+        });
+
+        it("should throw when called on a nonrunning job", () => {
+          doc._id = "thisId";
+          expect(() => job.done()).toThrow(/an unsaved or non-running job/);
+        });
+
+        it.skip("should properly pass the repeatId option", () => {
+          doc._id = "someId";
+          doc.runId = "otherId";
+          return new Promise((resolve) => {
+            job.done({
+              repeatId: "testID"
+            }, (err, res) => {
+              expect(res).toBe("testID");
+              resolve();
+            });
+          });
+        });
+
+        afterEach(() => {
+          Job._ddp_apply.mockClear();
+        });
+
+        afterAll(() => {
+          // eslint-disable-next-line camelcase
+          Job._ddp_apply = originalDDPApply;
+        });
+      });
+
+      describe(".fail()", () => {
+        beforeAll(() => {
+          originalDDPApply = Job._ddp_apply;
+          // eslint-disable-next-line camelcase
+          Job._ddp_apply = jest.fn(makeDdpStub((name, params) => {
+            let res;
+            if (name !== "root_jobFail") {
+              throw new Error("Bad method name");
+            }
+            const id = params[0];
+            const runId = params[1];
+            const err = params[2];
+            const options = params[3];
+            if ((id === "thisId") && (runId === "thatId") && (typeof err === "object")) {
+              if (options.fatal) {
+                throw new Error("Fatal Error!");
+              }
+              res = err;
+            } else {
+              res = false;
+            }
+            return [null, res];
+          }));
+        });
+
+        it("should make valid DDP call when invoked on a running job", () => {
+          doc._id = "thisId";
+          doc.runId = "thatId";
+          const res = job.fail();
+          expect(res).toEqual({ value: "No error information provided" });
+        });
+
+        it("should properly handle an error string", () => {
+          doc._id = "thisId";
+          doc.runId = "thatId";
+          const err = "This is an error";
+          const res = job.fail(err);
+          expect(res).toEqual({ value: err });
+        });
+
+        it("should properly handle an error object", () => {
+          doc._id = "thisId";
+          doc.runId = "thatId";
+          const err = {
+            message: "This is an error"
+          };
+          const res = job.fail(err);
+          expect(res).toEqual(err);
+        });
+
+        it("should work with a callback", () => {
+          doc._id = "thisId";
+          doc.runId = "thatId";
+          return new Promise((resolve) => {
+            job.fail((err, res) => {
+              expect(res.value).toBe("No error information provided");
+              resolve();
+            });
+          });
+        });
+
+        it("should properly handle the fatal option", () => {
+          doc._id = "thisId";
+          doc.runId = "thatId";
+          expect(() => job.fail("Fatal error!", { fatal: true })).toThrow(/Fatal Error!/);
+        });
+
+        it("should throw when called on an unsaved job", () => {
+          expect(() => job.fail()).toThrow(/an unsaved or non-running job/);
+        });
+
+        it("should throw when called on a nonrunning job", () => {
+          doc._id = "thisId";
+          expect(() => job.fail()).toThrow(/an unsaved or non-running job/);
+        });
+
+        afterEach(() => {
+          Job._ddp_apply.mockClear();
+        });
+
+        afterAll(() => {
+          // eslint-disable-next-line camelcase
+          Job._ddp_apply = originalDDPApply;
+        });
+      });
+
+  //     return describe("job control operation", function () {
+
+  //       const makeJobControl = (op, method) => describe(op, function () {
+
+  //         before(() => sinon.stub(Job, "_ddp_apply").callsFake(makeDdpStub(function (name, params) {
+  //           let res;
+  //           if (name !== `root_${method}`) {
+  //             throw new Error(`Bad method name: ${name}`);
+  //           }
+  //           const id = params[0];
+  //           if (id === "thisId") {
+  //             res = true;
+  //           } else {
+  //             res = false;
+  //           }
+  //           return [null, res];
+  //         })));
+
+  //         it("should properly invoke the DDP method", function () {
+  //           assert.isFunction(job[op]);
+  //           doc._id = "thisId";
+  //           const res = job[op]();
+  //           return assert.isTrue(res);
+  //         });
+
+  //         it("should return false if the id is not on the server", function () {
+  //           assert.isFunction(job[op]);
+  //           doc._id = "badId";
+  //           const res = job[op]();
+  //           return assert.isFalse(res);
+  //         });
+
+  //         it("should work with a callback", function (done) {
+  //           let res;
+  //           assert.isFunction(job[op]);
+  //           doc._id = "thisId";
+  //           return res = job[op](function (err, res) {
+  //             assert.isTrue(res);
+  //             return done();
+  //           });
+  //         });
+
+  //         if (["pause", "resume"].includes(op)) {
+  //           it("should alter local state when called on an unsaved job", function () {
+  //             const bad = "badStatus";
+  //             doc.status = bad;
+  //             const res = job[op]();
+  //             assert.equal(res, job);
+  //             return assert.notEqual(doc.status, bad);
+  //           });
+
+  //           it("should alter local state when called on an unsaved job with callback", function (done) {
+  //             let res;
+  //             const bad = "badStatus";
+  //             doc.status = bad;
+  //             return res = job[op](function (err, res) {
+  //               assert.isTrue(res);
+  //               assert.notEqual(doc.status, bad);
+  //               return done();
+  //             });
+  //           });
+  //         } else {
+  //           it("should throw when called on an unsaved job", () => assert.throw((() => job[op]()), /on an unsaved job/));
+  //         }
+
+  //         afterEach(() => Job._ddp_apply.resetHistory());
+
+  //         return after(() => Job._ddp_apply.restore());
+  //       });
+
+  //       makeJobControl("pause", "jobPause");
+  //       makeJobControl("resume", "jobResume");
+  //       makeJobControl("ready", "jobReady");
+  //       makeJobControl("cancel", "jobCancel");
+  //       makeJobControl("restart", "jobRestart");
+  //       makeJobControl("rerun", "jobRerun");
+  //       return makeJobControl("remove", "jobRemove");
+  //     });
+  //   });
+
+  //   return describe("class method", function () {
+
+  //     describe("getWork", function () {
+
+  //       before(() => sinon.stub(Job, "_ddp_apply").callsFake(makeDdpStub(function (name, params) {
+  //         if (name !== "root_getWork") {
+  //           throw new Error("Bad method name");
+  //         }
+  //         const type = params[0][0];
+  //         const max = (params[1] != null
+  //           ? params[1].maxJobs
+  //           : undefined) != null
+  //           ? (params[1] != null
+  //             ? params[1].maxJobs
+  //             : undefined)
+  //           : 1;
+  //         const res = (() => {
+  //           switch (type) {
+  //             case "work":
+  //               return (__range__(1, max, true).map((i) => Job("root", type, { i: 1 })._doc));
+  //             case "nowork":
+  //               return [];
+  //           }
+  //         })();
+  //         return [null, res];
+  //       })));
+
+  //       it("should make a DDP method call and return a Job by default without callback", function () {
+  //         const res = Job.getWork("root", "work", {});
+  //         return assert.instanceOf(res, Job);
+  //       });
+
+  //       it("should return undefined when no work is available without callback", function () {
+  //         const res = Job.getWork("root", "nowork", {});
+  //         return assert.isUndefined(res);
+  //       });
+
+  //       it("should return an array of Jobs when options.maxJobs > 1 without callback", function () {
+  //         const res = Job.getWork("root", "work", { maxJobs: 2 });
+  //         assert.isArray(res);
+  //         assert.lengthOf(res, 2);
+  //         return assert.instanceOf(res[0], Job);
+  //       });
+
+  //       it("should return an empty array when options.maxJobs > 1 and there is no work without callback", function () {
+  //         const res = Job.getWork("root", "nowork", { maxJobs: 2 });
+  //         assert.isArray(res);
+  //         return assert.lengthOf(res, 0);
+  //       });
+
+  //       it("should throw when given on invalid value for the timeout option", function () {
+  //         assert.throw((() => Job.getWork("root", "nowork", { workTimeout: "Bad" })), /must be a positive integer/);
+  //         assert.throw((() => Job.getWork("root", "nowork", { workTimeout: 0 })), /must be a positive integer/);
+  //         return assert.throw((() => Job.getWork("root", "nowork", { workTimeout: -1 })), /must be a positive integer/);
+  //       });
+
+  //       afterEach(() => Job._ddp_apply.resetHistory());
+
+  //       return after(() => Job._ddp_apply.restore());
+  //     });
+
+  //     describe("makeJob", function () {
+
+  //       const jobDoc = function () {
+  //         const j = new Job("root", "work", {})._doc;
+  //         j._id = {
+  //           _str: "skljfdf9s0ujfsdfl3"
+  //         };
+  //         return j;
+  //       };
+
+  //       it("should return a valid job instance when called with a valid job document", function () {
+  //         const res = new Job("root", jobDoc());
+  //         return assert.instanceOf(res, Job);
+  //       });
+
+  //       return it("should throw when passed invalid params", function () {
+  //         assert.throw((() => new Job()), /bad parameter/);
+  //         assert.throw((() => new Job(5, jobDoc())), /bad parameter/);
+  //         return assert.throw((() => new Job("work", {})), /bad parameter/);
+  //       });
+  //     });
+
+  //     describe("get Job(s) by ID", function () {
+
+  //       const getJobStub = function (name, params) {
+  //         let res;
+  //         let j;
+  //         if (name !== "root_getJob") {
+  //           throw new Error("Bad method name");
+  //         }
+  //         const ids = params[0];
+
+  //         const one = function (id) {
+  //           j = (() => {
+  //             switch (id) {
+  //               case "goodID":
+  //                 return Job("root", "work", { i: 1 })._doc;
+  //               default:
+  //                 return undefined;
+  //             }
+  //           })();
+  //           return j;
+  //         };
+
+  //         if (ids instanceof Array) {
+  //           res = ((() => {
+  //             const result = [];
+  //             for (j of Array.from(ids)) {
+  //               if (j === "goodID") {
+  //                 result.push(one(j));
+  //               }
+  //             }
+  //             return result;
+  //           })());
+  //         } else {
+  //           res = one(ids);
+  //         }
+
+  //         return [null, res];
+  //       };
+
+  //       describe("getJob", function () {
+
+  //         before(() => sinon.stub(Job, "_ddp_apply").callsFake(makeDdpStub(getJobStub)));
+
+  //         it("should return a valid job instance when called with a good id", function () {
+  //           const res = Job.getJob("root", "goodID");
+  //           return assert.instanceOf(res, Job);
+  //         });
+
+  //         it("should return undefined when called with a bad id", function () {
+  //           const res = Job.getJob("root", "badID");
+  //           return assert.isUndefined(res);
+  //         });
+
+  //         afterEach(() => Job._ddp_apply.resetHistory());
+
+  //         return after(() => Job._ddp_apply.restore());
+  //       });
+
+  //       return describe("getJobs", function () {
+
+  //         before(() => sinon.stub(Job, "_ddp_apply").callsFake(makeDdpStub(getJobStub)));
+
+  //         it("should return valid job instances for good IDs only", function () {
+  //           const res = Job.getJobs("root", ["goodID", "badID", "goodID"]);
+  //           assert(Job._ddp_apply.calledOnce, "getJob method called more than once");
+  //           assert.isArray(res);
+  //           assert.lengthOf(res, 2);
+  //           assert.instanceOf(res[0], Job);
+  //           return assert.instanceOf(res[1], Job);
+  //         });
+
+  //         it("should return an empty array for all bad IDs", function () {
+  //           const res = Job.getJobs("root", ["badID", "badID", "badID"]);
+  //           assert(Job._ddp_apply.calledOnce, "getJob method called more than once");
+  //           assert.isArray(res);
+  //           return assert.lengthOf(res, 0);
+  //         });
+
+  //         afterEach(() => Job._ddp_apply.resetHistory());
+
+  //         return after(() => Job._ddp_apply.restore());
+  //       });
+  //     });
+
+  //     describe("multijob operation", function () {
+
+  //       const makeMulti = (op, method) => describe(op, function () {
+
+  //         before(() => sinon.stub(Job, "_ddp_apply").callsFake(makeDdpStub(function (name, params) {
+  //           if (name !== `root_${method}`) {
+  //             throw new Error(`Bad method name: ${name}`);
+  //           }
+  //           const ids = params[0];
+  //           return [
+  //             null, ids.indexOf("goodID") !== -1
+  //           ];
+  //         })));
+
+  //         it("should return true if there are any good IDs", function () {
+  //           assert.isFunction(Job[op]);
+  //           const res = Job[op]("root", ["goodID", "badID", "goodID"]);
+  //           assert(Job._ddp_apply.calledOnce, `${op} method called more than once`);
+  //           assert.isBoolean(res);
+  //           return assert.isTrue(res);
+  //         });
+
+  //         it("should return false if there are all bad IDs", function () {
+  //           assert.isFunction(Job[op]);
+  //           const res = Job[op]("root", ["badID", "badID"]);
+  //           assert(Job._ddp_apply.calledOnce, `${op} method called more than once`);
+  //           assert.isBoolean(res);
+  //           return assert.isFalse(res);
+  //         });
+
+  //         afterEach(() => Job._ddp_apply.resetHistory());
+
+  //         return after(() => Job._ddp_apply.restore());
+  //       });
+
+  //       makeMulti("pauseJobs", "jobPause");
+  //       makeMulti("resumeJobs", "jobResume");
+  //       makeMulti("cancelJobs", "jobCancel");
+  //       makeMulti("restartJobs", "jobRestart");
+  //       return makeMulti("removeJobs", "jobRemove");
+  //     });
+
+  //     return describe("control method", function () {
+
+  //       const makeControl = op => describe(op, function () {
+
+  //         before(() => sinon.stub(Job, "_ddp_apply").callsFake(makeDdpStub(function (name, params) {
+  //           if (name !== `root_${op}`) {
+  //             throw new Error(`Bad method name: ${name}`);
+  //           }
+  //           return [null, true];
+  //         })));
+
+  //         it("should return a boolean", function () {
+  //           assert.isFunction(Job[op]);
+  //           const res = Job[op]("root");
+  //           assert(Job._ddp_apply.calledOnce, `${op} method called more than once`);
+  //           return assert.isBoolean(res);
+  //         });
+
+  //         afterEach(() => Job._ddp_apply.resetHistory());
+
+  //         return after(() => Job._ddp_apply.restore());
+  //       });
+
+  //       makeControl("startJobs");
+  //       makeControl("stopJobs");
+  //       makeControl("startJobServer");
+  //       return makeControl("shutdownJobServer");
+  //     });
+    });
+  });
 });
-
-//   return describe("communicating", function () {
-
-//     let ddp = null;
-
-//     before(function () {
-//       ddp = new DDP();
-//       return Job.setDDP(ddp);
-//     });
-
-//     describe("job status method", function () {
-
-//       let job = null;
-//       let doc = null;
-
-//       beforeEach(function () {
-//         job = Job("root", "work", {});
-//         return doc = job._doc;
-//       });
-
-//       describe(".save()", function () {
-
-//         before(() => sinon.stub(Job, "_ddp_apply").callsFake(makeDdpStub(function (name, params) {
-//           let res;
-//           if (name !== "root_jobSave") {
-//             throw new Error("Bad method name");
-//           }
-//           doc = params[0];
-//           const options = params[1];
-//           if (options.cancelRepeats) {
-//             throw new Error("cancelRepeats");
-//           }
-//           if (typeof doc === "object") {
-//             res = "newId";
-//           } else {
-//             res = null;
-//           }
-//           return [null, res];
-//         })));
-
-//         it("should make valid DDP call when invoked", function () {
-//           const res = job.save();
-//           return assert.equal(res, "newId");
-//         });
-
-//         it("should work with a callback", done => job.save(function (err, res) {
-//           assert.equal(res, "newId");
-//           return done();
-//         }));
-
-//         it("should properly pass cancelRepeats option", () => assert.throw((() => job.save({ cancelRepeats: true })), /cancelRepeats/));
-
-//         it("should properly pass cancelRepeats option with callback", () => assert.throw((() => job.save({
-//           cancelRepeats: true
-//         }, function () { })), /cancelRepeats/));
-
-//         afterEach(() => Job._ddp_apply.resetHistory());
-
-//         return after(() => Job._ddp_apply.restore());
-//       });
-
-//       describe(".refresh()", function () {
-
-//         before(() => sinon.stub(Job, "_ddp_apply").callsFake(makeDdpStub(function (name, params) {
-//           let res;
-//           if (name !== "root_getJob") {
-//             throw new Error("Bad method name");
-//           }
-//           const id = params[0];
-//           const options = params[1];
-//           if (options.getLog) {
-//             throw new Error("getLog");
-//           }
-//           if (id === "thisId") {
-//             res = {
-//               foo: "bar"
-//             };
-//           } else {
-//             res = null;
-//           }
-//           return [null, res];
-//         })));
-
-//         it("should make valid DDP call when invoked", function () {
-//           doc._id = "thisId";
-//           const res = job.refresh();
-//           assert.deepEqual(job._doc, { foo: "bar" });
-//           return assert.equal(res, job);
-//         });
-
-//         it("should work with a callback", function (done) {
-//           doc._id = "thisId";
-//           return job.refresh(function (err, res) {
-//             assert.deepEqual(job._doc, { foo: "bar" });
-//             assert.equal(res, job);
-//             return done();
-//           });
-//         });
-
-//         it("shouldn't modify job when not found on server", function () {
-//           doc._id = "thatId";
-//           const res = job.refresh();
-//           assert.isFalse(res);
-//           return assert.deepEqual(job._doc, doc);
-//         });
-
-//         it("should properly pass getLog option", function () {
-//           doc._id = "thisId";
-//           return assert.throw((() => job.refresh({ getLog: true })), /getLog/);
-//         });
-
-//         it("should throw when called on an unsaved job", () => assert.throw((() => job.refresh()), /on an unsaved job/));
-
-//         afterEach(() => Job._ddp_apply.resetHistory());
-
-//         return after(() => Job._ddp_apply.restore());
-//       });
-
-//       describe(".log()", function () {
-
-//         before(() => sinon.stub(Job, "_ddp_apply").callsFake(makeDdpStub(function (name, params) {
-//           let res;
-//           if (name !== "root_jobLog") {
-//             throw new Error("Bad method name");
-//           }
-//           const id = params[0];
-//           const runId = params[1];
-//           const msg = params[2];
-//           const level = (params[3] != null
-//             ? params[3].level
-//             : undefined) != null
-//             ? (params[3] != null
-//               ? params[3].level
-//               : undefined)
-//             : "gerinfo";
-//           if ((id === "thisId") && (runId === "thatId") && (msg === "Hello") && Array.from(Job.jobLogLevels).includes(level)) {
-//             res = level;
-//           } else {
-//             res = false;
-//           }
-//           return [null, res];
-//         })));
-
-//         it("should add a valid log entry to the local state when invoked before a job is saved", function () {
-//           const j = job.log("Hello", { level: "success" });
-//           assert.equal(j, job);
-//           const thisLog = doc.log[1]; //  [0] is the "Created" log message
-//           assert.equal(thisLog.message, "Hello");
-//           assert.equal(thisLog.level, "success");
-//           assert.instanceOf(thisLog.time, Date);
-//           return assert.closeTo(thisLog.time.valueOf(), new Date().valueOf(), 1000);
-//         });
-
-//         it("should make valid DDP call when invoked on a saved job", function () {
-//           doc._id = "thisId";
-//           doc.runId = "thatId";
-//           const res = job.log("Hello");
-//           return assert.equal(res, "info");
-//         });
-
-//         it("should correctly pass level option", function () {
-//           doc._id = "thisId";
-//           doc.runId = "thatId";
-//           const res = job.log("Hello", { level: "danger" });
-//           return assert.equal(res, "danger");
-//         });
-
-//         it("should work with a callback", function (done) {
-//           doc._id = "thisId";
-//           doc.runId = "thatId";
-//           return job.log("Hello", {
-//             level: "success"
-//           }, function (err, res) {
-//             assert.equal(res, "success");
-//             return done();
-//           });
-//         });
-
-//         it("should throw when passed an invalid message", function () {
-//           doc._id = "thisId";
-//           doc.runId = "thatId";
-//           return assert.throw((() => job.log(43, { level: "danger" })), /Log message must be a string/);
-//         });
-
-//         it("should throw when passed an invalid level", function () {
-//           doc._id = "thisId";
-//           doc.runId = "thatId";
-//           assert.throw((() => job.log("Hello", { level: "blargh" })), /Log level options must be one of Job.jobLogLevels/);
-//           return assert.throw((() => job.log("Hello", { level: [] })), /Log level options must be one of Job.jobLogLevels/);
-//         });
-
-//         describe("echo option", function () {
-
-//           let jobConsole = null;
-
-//           before(function () {
-//             jobConsole = Job.__get__("console");
-//             return Job.__set__("console", {
-//               info(...params) {
-//                 throw new Error("info");
-//               },
-//               log(...params) {
-//                 throw new Error("success");
-//               },
-//               warn(...params) {
-//                 throw new Error("warning");
-//               },
-//               error(...params) {
-//                 throw new Error("danger");
-//               }
-//             });
-//           });
-
-//           it("should echo the log to the console at the level requested", function () {
-//             assert.doesNotThrow((() => job.log("Hello")), "echo occurred without being requested");
-//             assert.doesNotThrow((() => job.log("Hello", { echo: false })), "echo occurred when explicitly disabled");
-//             assert.throw((() => job.log("Hello", { echo: true })), /info/);
-//             assert.throw((() => job.log("Hello", {
-//               echo: true,
-//               level: "info"
-//             })), /info/);
-//             assert.throw((() => job.log("Hello", {
-//               echo: true,
-//               level: "success"
-//             })), /success/);
-//             assert.throw((() => job.log("Hello", {
-//               echo: true,
-//               level: "warning"
-//             })), /warning/);
-//             return assert.throw((() => job.log("Hello", {
-//               echo: true,
-//               level: "danger"
-//             })), /danger/);
-//           });
-
-//           it("shouldn't echo the log to the console below the level requested", function () {
-//             assert.doesNotThrow((() => job.log("Hello", { echo: "warning" })));
-//             assert.doesNotThrow((() => job.log("Hello", {
-//               echo: "warning",
-//               level: "info"
-//             })));
-//             assert.doesNotThrow((() => job.log("Hello", {
-//               echo: "warning",
-//               level: "success"
-//             })));
-//             assert.throw((() => job.log("Hello", {
-//               echo: "warning",
-//               level: "warning"
-//             })), /warning/);
-//             return assert.throw((() => job.log("Hello", {
-//               echo: "warning",
-//               level: "danger"
-//             })), /danger/);
-//           });
-
-//           return after(() => Job.__set__("console", jobConsole));
-//         });
-
-//         afterEach(() => Job._ddp_apply.resetHistory());
-
-//         return after(() => Job._ddp_apply.restore());
-//       });
-
-//       describe(".progress()", function () {
-
-//         before(() => sinon.stub(Job, "_ddp_apply").callsFake(makeDdpStub(function (name, params) {
-//           let res;
-//           if (name !== "root_jobProgress") {
-//             throw new Error("Bad method name");
-//           }
-//           const id = params[0];
-//           const runId = params[1];
-//           const completed = params[2];
-//           const total = params[3];
-//           if ((id === "thisId") && (runId === "thatId") && (typeof completed === "number") && (typeof total === "number") && (0 <= completed && completed <= total) && (total > 0)) {
-//             res = (100 * completed) / total;
-//           } else {
-//             res = false;
-//           }
-//           return [null, res];
-//         })));
-
-//         it("should add a valid progress update to the local state when invoked before a job is saved", function () {
-//           const j = job.progress(2.5, 10);
-//           assert.equal(j, job);
-//           return assert.deepEqual(doc.progress, {
-//             completed: 2.5,
-//             total: 10,
-//             percent: 25
-//           });
-//         });
-
-//         it("should make valid DDP call when invoked on a saved job", function () {
-//           doc._id = "thisId";
-//           doc.runId = "thatId";
-//           const res = job.progress(5, 10);
-//           return assert.equal(res, 50);
-//         });
-
-//         it("should work with a callback", function (done) {
-//           doc._id = "thisId";
-//           doc.runId = "thatId";
-//           return job.progress(7.5, 10, function (err, res) {
-//             assert.equal(res, 75);
-//             return done();
-//           });
-//         });
-
-//         describe("echo option", function () {
-
-//           let jobConsole = null;
-
-//           before(function () {
-//             jobConsole = Job.__get__("console");
-//             return Job.__set__("console", {
-//               info(...params) {
-//                 throw new Error("info");
-//               }
-//             });
-//           });
-
-//           it("should progress updates to the console when requested", function () {
-//             assert.doesNotThrow((() => job.progress(0, 100)));
-//             assert.doesNotThrow((() => job.progress(0, 100, { echo: false })));
-//             return assert.throw((() => job.progress(0, 100, { echo: true })), /info/);
-//           });
-
-//           return after(() => Job.__set__("console", jobConsole));
-//         });
-
-//         it("should throw when given invalid paramters", function () {
-//           assert.throw((() => job.progress(true, 100)), /job.progress: something is wrong with progress params/);
-//           assert.throw((() => job.progress(0, "hundred")), /job.progress: something is wrong with progress params/);
-//           assert.throw((() => job.progress(-1, 100)), /job.progress: something is wrong with progress params/);
-//           assert.throw((() => job.progress(2, 1)), /job.progress: something is wrong with progress params/);
-//           assert.throw((() => job.progress(0, 0)), /job.progress: something is wrong with progress params/);
-//           assert.throw((() => job.progress(0, -1)), /job.progress: something is wrong with progress params/);
-//           return assert.throw((() => job.progress(-2, -1)), /job.progress: something is wrong with progress params/);
-//         });
-
-//         afterEach(() => Job._ddp_apply.resetHistory());
-
-//         return after(() => Job._ddp_apply.restore());
-//       });
-
-//       describe(".done()", function () {
-
-//         before(() => sinon.stub(Job, "_ddp_apply").callsFake(makeDdpStub(function (name, params) {
-//           let res;
-//           if (name !== "root_jobDone") {
-//             throw new Error("Bad method name");
-//           }
-//           const id = params[0];
-//           const runId = params[1];
-//           const result = params[2];
-//           const options = params[3];
-//           if ((id === "thisId") && (runId === "thatId") && (typeof result === "object")) {
-//             res = result;
-//           } else if (options.resultId) {
-//             res = result.resultId;
-//           } else {
-//             res = false;
-//           }
-//           return [null, res];
-//         })));
-
-//         it("should make valid DDP call when invoked on a running job", function () {
-//           doc._id = "thisId";
-//           doc.runId = "thatId";
-//           const res = job.done();
-//           return assert.deepEqual(res, {});
-//         });
-
-//         it("should properly handle a result object", function () {
-//           doc._id = "thisId";
-//           doc.runId = "thatId";
-//           const result = {
-//             foo: "bar",
-//             status: 0
-//           };
-//           const res = job.done(result);
-//           return assert.deepEqual(res, result);
-//         });
-
-//         it("should properly handle a non-object result", function () {
-//           doc._id = "thisId";
-//           doc.runId = "thatId";
-//           const result = "Done!";
-//           const res = job.done(result);
-//           return assert.deepEqual(res, { value: result });
-//         });
-
-//         it("should work with a callback", function (done) {
-//           doc._id = "thisId";
-//           doc.runId = "thatId";
-//           return job.done(function (err, res) {
-//             assert.deepEqual(res, {});
-//             return done();
-//           });
-//         });
-
-//         it("should throw when called on an unsaved job", () => assert.throw((() => job.done()), /an unsaved or non-running job/));
-
-//         it("should throw when called on a nonrunning job", function () {
-//           doc._id = "thisId";
-//           return assert.throw((() => job.done()), /an unsaved or non-running job/);
-//         });
-
-//         it("should properly pass the repeatId option", function () {
-//           doc._id = "someId";
-//           doc.runId = "otherId";
-//           return job.done({
-//             repeatId: "testID"
-//           }, {
-//               repeatId: true
-//             }, function (err, res) {
-//               assert.deepEqual(res, "testID");
-//               return done();
-//             });
-//         });
-
-//         afterEach(() => Job._ddp_apply.resetHistory());
-
-//         return after(() => Job._ddp_apply.restore());
-//       });
-
-//       describe(".fail()", function () {
-
-//         before(() => sinon.stub(Job, "_ddp_apply").callsFake(makeDdpStub(function (name, params) {
-//           let res;
-//           if (name !== "root_jobFail") {
-//             throw new Error("Bad method name");
-//           }
-//           const id = params[0];
-//           const runId = params[1];
-//           const err = params[2];
-//           const options = params[3];
-//           if ((id === "thisId") && (runId === "thatId") && (typeof err === "object")) {
-//             if (options.fatal) {
-//               throw new Error("Fatal Error!");
-//             }
-//             res = err;
-//           } else {
-//             res = false;
-//           }
-//           return [null, res];
-//         })));
-
-//         it("should make valid DDP call when invoked on a running job", function () {
-//           doc._id = "thisId";
-//           doc.runId = "thatId";
-//           const res = job.fail();
-//           return assert.deepEqual(res, { value: "No error information provided" });
-//         });
-
-//         it("should properly handle an error string", function () {
-//           doc._id = "thisId";
-//           doc.runId = "thatId";
-//           const err = "This is an error";
-//           const res = job.fail(err);
-//           return assert.deepEqual(res, { value: err });
-//         });
-
-//         it("should properly handle an error object", function () {
-//           doc._id = "thisId";
-//           doc.runId = "thatId";
-//           const err = {
-//             message: "This is an error"
-//           };
-//           const res = job.fail(err);
-//           return assert.equal(res, err);
-//         });
-
-//         it("should work with a callback", function (done) {
-//           doc._id = "thisId";
-//           doc.runId = "thatId";
-//           return job.fail(function (err, res) {
-//             assert.equal(res.value, "No error information provided");
-//             return done();
-//           });
-//         });
-
-//         it("should properly handle the fatal option", function () {
-//           doc._id = "thisId";
-//           doc.runId = "thatId";
-//           return assert.throw((() => job.fail("Fatal error!", { fatal: true })), /Fatal Error!/);
-//         });
-
-//         it("should throw when called on an unsaved job", () => assert.throw((() => job.fail()), /an unsaved or non-running job/));
-
-//         it("should throw when called on a nonrunning job", function () {
-//           doc._id = "thisId";
-//           return assert.throw((() => job.fail()), /an unsaved or non-running job/);
-//         });
-
-//         afterEach(() => Job._ddp_apply.resetHistory());
-
-//         return after(() => Job._ddp_apply.restore());
-//       });
-
-//       return describe("job control operation", function () {
-
-//         const makeJobControl = (op, method) => describe(op, function () {
-
-//           before(() => sinon.stub(Job, "_ddp_apply").callsFake(makeDdpStub(function (name, params) {
-//             let res;
-//             if (name !== `root_${method}`) {
-//               throw new Error(`Bad method name: ${name}`);
-//             }
-//             const id = params[0];
-//             if (id === "thisId") {
-//               res = true;
-//             } else {
-//               res = false;
-//             }
-//             return [null, res];
-//           })));
-
-//           it("should properly invoke the DDP method", function () {
-//             assert.isFunction(job[op]);
-//             doc._id = "thisId";
-//             const res = job[op]();
-//             return assert.isTrue(res);
-//           });
-
-//           it("should return false if the id is not on the server", function () {
-//             assert.isFunction(job[op]);
-//             doc._id = "badId";
-//             const res = job[op]();
-//             return assert.isFalse(res);
-//           });
-
-//           it("should work with a callback", function (done) {
-//             let res;
-//             assert.isFunction(job[op]);
-//             doc._id = "thisId";
-//             return res = job[op](function (err, res) {
-//               assert.isTrue(res);
-//               return done();
-//             });
-//           });
-
-//           if (["pause", "resume"].includes(op)) {
-//             it("should alter local state when called on an unsaved job", function () {
-//               const bad = "badStatus";
-//               doc.status = bad;
-//               const res = job[op]();
-//               assert.equal(res, job);
-//               return assert.notEqual(doc.status, bad);
-//             });
-
-//             it("should alter local state when called on an unsaved job with callback", function (done) {
-//               let res;
-//               const bad = "badStatus";
-//               doc.status = bad;
-//               return res = job[op](function (err, res) {
-//                 assert.isTrue(res);
-//                 assert.notEqual(doc.status, bad);
-//                 return done();
-//               });
-//             });
-//           } else {
-//             it("should throw when called on an unsaved job", () => assert.throw((() => job[op]()), /on an unsaved job/));
-//           }
-
-//           afterEach(() => Job._ddp_apply.resetHistory());
-
-//           return after(() => Job._ddp_apply.restore());
-//         });
-
-//         makeJobControl("pause", "jobPause");
-//         makeJobControl("resume", "jobResume");
-//         makeJobControl("ready", "jobReady");
-//         makeJobControl("cancel", "jobCancel");
-//         makeJobControl("restart", "jobRestart");
-//         makeJobControl("rerun", "jobRerun");
-//         return makeJobControl("remove", "jobRemove");
-//       });
-//     });
-
-//     return describe("class method", function () {
-
-//       describe("getWork", function () {
-
-//         before(() => sinon.stub(Job, "_ddp_apply").callsFake(makeDdpStub(function (name, params) {
-//           if (name !== "root_getWork") {
-//             throw new Error("Bad method name");
-//           }
-//           const type = params[0][0];
-//           const max = (params[1] != null
-//             ? params[1].maxJobs
-//             : undefined) != null
-//             ? (params[1] != null
-//               ? params[1].maxJobs
-//               : undefined)
-//             : 1;
-//           const res = (() => {
-//             switch (type) {
-//               case "work":
-//                 return (__range__(1, max, true).map((i) => Job("root", type, { i: 1 })._doc));
-//               case "nowork":
-//                 return [];
-//             }
-//           })();
-//           return [null, res];
-//         })));
-
-//         it("should make a DDP method call and return a Job by default without callback", function () {
-//           const res = Job.getWork("root", "work", {});
-//           return assert.instanceOf(res, Job);
-//         });
-
-//         it("should return undefined when no work is available without callback", function () {
-//           const res = Job.getWork("root", "nowork", {});
-//           return assert.isUndefined(res);
-//         });
-
-//         it("should return an array of Jobs when options.maxJobs > 1 without callback", function () {
-//           const res = Job.getWork("root", "work", { maxJobs: 2 });
-//           assert.isArray(res);
-//           assert.lengthOf(res, 2);
-//           return assert.instanceOf(res[0], Job);
-//         });
-
-//         it("should return an empty array when options.maxJobs > 1 and there is no work without callback", function () {
-//           const res = Job.getWork("root", "nowork", { maxJobs: 2 });
-//           assert.isArray(res);
-//           return assert.lengthOf(res, 0);
-//         });
-
-//         it("should throw when given on invalid value for the timeout option", function () {
-//           assert.throw((() => Job.getWork("root", "nowork", { workTimeout: "Bad" })), /must be a positive integer/);
-//           assert.throw((() => Job.getWork("root", "nowork", { workTimeout: 0 })), /must be a positive integer/);
-//           return assert.throw((() => Job.getWork("root", "nowork", { workTimeout: -1 })), /must be a positive integer/);
-//         });
-
-//         afterEach(() => Job._ddp_apply.resetHistory());
-
-//         return after(() => Job._ddp_apply.restore());
-//       });
-
-//       describe("makeJob", function () {
-
-//         const jobDoc = function () {
-//           const j = new Job("root", "work", {})._doc;
-//           j._id = {
-//             _str: "skljfdf9s0ujfsdfl3"
-//           };
-//           return j;
-//         };
-
-//         it("should return a valid job instance when called with a valid job document", function () {
-//           const res = new Job("root", jobDoc());
-//           return assert.instanceOf(res, Job);
-//         });
-
-//         return it("should throw when passed invalid params", function () {
-//           assert.throw((() => new Job()), /bad parameter/);
-//           assert.throw((() => new Job(5, jobDoc())), /bad parameter/);
-//           return assert.throw((() => new Job("work", {})), /bad parameter/);
-//         });
-//       });
-
-//       describe("get Job(s) by ID", function () {
-
-//         const getJobStub = function (name, params) {
-//           let res;
-//           let j;
-//           if (name !== "root_getJob") {
-//             throw new Error("Bad method name");
-//           }
-//           const ids = params[0];
-
-//           const one = function (id) {
-//             j = (() => {
-//               switch (id) {
-//                 case "goodID":
-//                   return Job("root", "work", { i: 1 })._doc;
-//                 default:
-//                   return undefined;
-//               }
-//             })();
-//             return j;
-//           };
-
-//           if (ids instanceof Array) {
-//             res = ((() => {
-//               const result = [];
-//               for (j of Array.from(ids)) {
-//                 if (j === "goodID") {
-//                   result.push(one(j));
-//                 }
-//               }
-//               return result;
-//             })());
-//           } else {
-//             res = one(ids);
-//           }
-
-//           return [null, res];
-//         };
-
-//         describe("getJob", function () {
-
-//           before(() => sinon.stub(Job, "_ddp_apply").callsFake(makeDdpStub(getJobStub)));
-
-//           it("should return a valid job instance when called with a good id", function () {
-//             const res = Job.getJob("root", "goodID");
-//             return assert.instanceOf(res, Job);
-//           });
-
-//           it("should return undefined when called with a bad id", function () {
-//             const res = Job.getJob("root", "badID");
-//             return assert.isUndefined(res);
-//           });
-
-//           afterEach(() => Job._ddp_apply.resetHistory());
-
-//           return after(() => Job._ddp_apply.restore());
-//         });
-
-//         return describe("getJobs", function () {
-
-//           before(() => sinon.stub(Job, "_ddp_apply").callsFake(makeDdpStub(getJobStub)));
-
-//           it("should return valid job instances for good IDs only", function () {
-//             const res = Job.getJobs("root", ["goodID", "badID", "goodID"]);
-//             assert(Job._ddp_apply.calledOnce, "getJob method called more than once");
-//             assert.isArray(res);
-//             assert.lengthOf(res, 2);
-//             assert.instanceOf(res[0], Job);
-//             return assert.instanceOf(res[1], Job);
-//           });
-
-//           it("should return an empty array for all bad IDs", function () {
-//             const res = Job.getJobs("root", ["badID", "badID", "badID"]);
-//             assert(Job._ddp_apply.calledOnce, "getJob method called more than once");
-//             assert.isArray(res);
-//             return assert.lengthOf(res, 0);
-//           });
-
-//           afterEach(() => Job._ddp_apply.resetHistory());
-
-//           return after(() => Job._ddp_apply.restore());
-//         });
-//       });
-
-//       describe("multijob operation", function () {
-
-//         const makeMulti = (op, method) => describe(op, function () {
-
-//           before(() => sinon.stub(Job, "_ddp_apply").callsFake(makeDdpStub(function (name, params) {
-//             if (name !== `root_${method}`) {
-//               throw new Error(`Bad method name: ${name}`);
-//             }
-//             const ids = params[0];
-//             return [
-//               null, ids.indexOf("goodID") !== -1
-//             ];
-//           })));
-
-//           it("should return true if there are any good IDs", function () {
-//             assert.isFunction(Job[op]);
-//             const res = Job[op]("root", ["goodID", "badID", "goodID"]);
-//             assert(Job._ddp_apply.calledOnce, `${op} method called more than once`);
-//             assert.isBoolean(res);
-//             return assert.isTrue(res);
-//           });
-
-//           it("should return false if there are all bad IDs", function () {
-//             assert.isFunction(Job[op]);
-//             const res = Job[op]("root", ["badID", "badID"]);
-//             assert(Job._ddp_apply.calledOnce, `${op} method called more than once`);
-//             assert.isBoolean(res);
-//             return assert.isFalse(res);
-//           });
-
-//           afterEach(() => Job._ddp_apply.resetHistory());
-
-//           return after(() => Job._ddp_apply.restore());
-//         });
-
-//         makeMulti("pauseJobs", "jobPause");
-//         makeMulti("resumeJobs", "jobResume");
-//         makeMulti("cancelJobs", "jobCancel");
-//         makeMulti("restartJobs", "jobRestart");
-//         return makeMulti("removeJobs", "jobRemove");
-//       });
-
-//       return describe("control method", function () {
-
-//         const makeControl = op => describe(op, function () {
-
-//           before(() => sinon.stub(Job, "_ddp_apply").callsFake(makeDdpStub(function (name, params) {
-//             if (name !== `root_${op}`) {
-//               throw new Error(`Bad method name: ${name}`);
-//             }
-//             return [null, true];
-//           })));
-
-//           it("should return a boolean", function () {
-//             assert.isFunction(Job[op]);
-//             const res = Job[op]("root");
-//             assert(Job._ddp_apply.calledOnce, `${op} method called more than once`);
-//             return assert.isBoolean(res);
-//           });
-
-//           afterEach(() => Job._ddp_apply.resetHistory());
-
-//           return after(() => Job._ddp_apply.restore());
-//         });
-
-//         makeControl("startJobs");
-//         makeControl("stopJobs");
-//         makeControl("startJobServer");
-//         return makeControl("shutdownJobServer");
-//       });
-//     });
-//   });
-// });
 
 // //##########################################
 
