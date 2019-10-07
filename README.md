@@ -19,7 +19,7 @@ We use the [Probot DCO GitHub app](https://github.com/apps/dco) to check for DCO
 If you forget to sign-off your commits, the DCO bot will remind you and give you detailed instructions for how to amend your commits to add a signature.
 
 ## License
-Reaction Job Queue is [Apache 2.0 Licensed](./LICENSE)
+Reaction Job Queue is licensed under the [Apache License, Version 2.0](./LICENSE).
 
 ### Attribution
 This project is ported from the excellent [Meteor Job Collection](https://github.com/vsivsi/meteor-job) which is [MIT Licensed](https://github.com/vsivsi/meteor-job/LICENSE)
